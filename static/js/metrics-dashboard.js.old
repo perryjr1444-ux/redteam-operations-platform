@@ -1,0 +1,889 @@
+/**
+ * Metrics Analytics Dashboard
+ * Comprehensive real-time analytics with Chart.js integration
+ * Professional, data-focused interface for Red Team operations
+ */
+
+// Chart.js Theme Configuration
+const chartTheme = {
+    colors: {
+        primary: '#0d6efd',
+        success: '#198754',
+        danger: '#dc3545',
+        warning: '#ffc107',
+        info: '#0dcaf0',
+        purple: '#6f42c1',
+        pink: '#d63384',
+        cyan: '#0dcaf0'
+    },
+    fonts: {
+        base: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif"
+    },
+    backgrounds: {
+        dark: 'rgba(13, 17, 23, 0.8)',
+        card: 'rgba(22, 27, 34, 0.9)'
+    }
+};
+
+// Configure Chart.js defaults for dark theme
+Chart.defaults.color = '#8b949e';
+Chart.defaults.borderColor = 'rgba(139, 148, 158, 0.2)';
+Chart.defaults.font.family = chartTheme.fonts.base;
+Chart.defaults.plugins.legend.labels.color = '#c9d1d9';
+Chart.defaults.plugins.tooltip.backgroundColor = chartTheme.backgrounds.card;
+Chart.defaults.plugins.tooltip.titleColor = '#c9d1d9';
+Chart.defaults.plugins.tooltip.bodyColor = '#8b949e';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(139, 148, 158, 0.3)';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+
+/**
+ * Alpine.js Metrics Dashboard Component
+ */
+function metricsDashboard() {
+    return {
+        // State
+        metrics: {
+            activeExercises: 0,
+            exerciseChange: 0,
+            systemHealth: 0,
+            runningContainers: 0,
+            cpuUsage: 0,
+            successRate: 0,
+            completedOps: 0,
+            totalOps: 0
+        },
+
+        timeRanges: [
+            { value: '1h', label: '1 Hour', seconds: 3600 },
+            { value: '24h', label: '24 Hours', seconds: 86400 },
+            { value: '7d', label: '7 Days', seconds: 604800 },
+            { value: '30d', label: '30 Days', seconds: 2592000 }
+        ],
+
+        selectedTimeRange: '24h',
+        lastUpdate: 'Never',
+        chartType: 'cpu',
+
+        containerStats: [],
+        activityLog: [],
+
+        historicalData: {
+            labels: [],
+            cpu: [],
+            memory: [],
+            containers: [],
+            operations: []
+        },
+
+        // Chart instances
+        charts: {
+            performance: null,
+            successRate: null,
+            toolUsage: null,
+            activity: null,
+            resource: null
+        },
+
+        // Update intervals
+        intervals: {
+            metrics: null,
+            activity: null,
+            charts: null
+        },
+
+        /**
+         * Initialize dashboard
+         */
+        init() {
+            console.log('[Metrics Dashboard] Initializing...');
+
+            // Initialize charts
+            this.$nextTick(() => {
+                this.initializeCharts();
+                this.loadInitialData();
+                this.startAutoRefresh();
+            });
+        },
+
+        /**
+         * Initialize all Chart.js instances
+         */
+        initializeCharts() {
+            this.initPerformanceChart();
+            this.initSuccessRateChart();
+            this.initToolUsageChart();
+            this.initActivityChart();
+            this.initResourceChart();
+        },
+
+        /**
+         * Performance Chart (Line Chart)
+         */
+        initPerformanceChart() {
+            const ctx = document.getElementById('performanceChart');
+            if (!ctx) return;
+
+            this.charts.performance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'CPU Usage %',
+                        data: [],
+                        borderColor: chartTheme.colors.primary,
+                        backgroundColor: this.hexToRgba(chartTheme.colors.primary, 0.1),
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            enabled: true,
+                            callbacks: {
+                                label: (context) => {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: true,
+                                color: 'rgba(139, 148, 158, 0.1)'
+                            },
+                            ticks: {
+                                color: '#8b949e'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                display: true,
+                                color: 'rgba(139, 148, 158, 0.1)'
+                            },
+                            ticks: {
+                                color: '#8b949e',
+                                callback: (value) => value + '%'
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        /**
+         * Success Rate Chart (Doughnut Chart)
+         */
+        initSuccessRateChart() {
+            const ctx = document.getElementById('successRateChart');
+            if (!ctx) return;
+
+            this.charts.successRate = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Success', 'Failed', 'Pending'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            chartTheme.colors.success,
+                            chartTheme.colors.danger,
+                            chartTheme.colors.warning
+                        ],
+                        borderColor: '#161b22',
+                        borderWidth: 2,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        /**
+         * Tool Usage Chart (Bar Chart)
+         */
+        initToolUsageChart() {
+            const ctx = document.getElementById('toolUsageChart');
+            if (!ctx) return;
+
+            this.charts.toolUsage = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Usage Count',
+                        data: [],
+                        backgroundColor: [
+                            chartTheme.colors.primary,
+                            chartTheme.colors.success,
+                            chartTheme.colors.info,
+                            chartTheme.colors.warning,
+                            chartTheme.colors.purple,
+                            chartTheme.colors.pink
+                        ],
+                        borderWidth: 0,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(139, 148, 158, 0.1)'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        /**
+         * Activity Chart (Line Chart)
+         */
+        initActivityChart() {
+            const ctx = document.getElementById('activityChart');
+            if (!ctx) return;
+
+            this.charts.activity = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Operations',
+                        data: [],
+                        borderColor: chartTheme.colors.info,
+                        backgroundColor: this.hexToRgba(chartTheme.colors.info, 0.1),
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(139, 148, 158, 0.1)'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        /**
+         * Resource Chart (Multi-line Area Chart)
+         */
+        initResourceChart() {
+            const ctx = document.getElementById('resourceChart');
+            if (!ctx) return;
+
+            this.charts.resource = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'CPU %',
+                            data: [],
+                            borderColor: chartTheme.colors.danger,
+                            backgroundColor: this.hexToRgba(chartTheme.colors.danger, 0.1),
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2
+                        },
+                        {
+                            label: 'Memory %',
+                            data: [],
+                            borderColor: chartTheme.colors.warning,
+                            backgroundColor: this.hexToRgba(chartTheme.colors.warning, 0.1),
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2
+                        },
+                        {
+                            label: 'Containers',
+                            data: [],
+                            borderColor: chartTheme.colors.success,
+                            backgroundColor: this.hexToRgba(chartTheme.colors.success, 0.1),
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: 'rgba(139, 148, 158, 0.1)'
+                            },
+                            ticks: {
+                                callback: (value) => value + '%'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            beginAtZero: true,
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                }
+            });
+        },
+
+        /**
+         * Load initial data
+         */
+        async loadInitialData() {
+            await Promise.all([
+                this.fetchLiveMetrics(),
+                this.fetchActivityData(),
+                this.fetchContainerStats(),
+                this.generateHistoricalData()
+            ]);
+        },
+
+        /**
+         * Fetch live metrics from API
+         */
+        async fetchLiveMetrics() {
+            try {
+                const response = await fetch('/api/metrics/live');
+                const data = await response.json();
+
+                // Update metrics
+                const prevExercises = this.metrics.activeExercises;
+                this.metrics.activeExercises = data.active_exercises || 0;
+                this.metrics.exerciseChange = this.metrics.activeExercises - prevExercises;
+                this.metrics.systemHealth = data.system_health || 0;
+                this.metrics.runningContainers = data.running_containers || 0;
+
+                this.lastUpdate = new Date().toLocaleTimeString();
+
+            } catch (error) {
+                console.error('[Metrics Dashboard] Error fetching live metrics:', error);
+            }
+        },
+
+        /**
+         * Fetch activity data
+         */
+        async fetchActivityData() {
+            try {
+                const response = await fetch('/api/metrics/activity');
+                const data = await response.json();
+
+                // Update success rate
+                this.metrics.completedOps = data.completed_operations || 0;
+                this.metrics.totalOps = data.total_operations || 0;
+                this.metrics.successRate = this.metrics.totalOps > 0
+                    ? Math.round((this.metrics.completedOps / this.metrics.totalOps) * 100)
+                    : 0;
+
+                // Update success rate chart
+                if (this.charts.successRate && data.operation_status) {
+                    this.charts.successRate.data.datasets[0].data = [
+                        data.operation_status.success || 0,
+                        data.operation_status.failed || 0,
+                        data.operation_status.pending || 0
+                    ];
+                    this.charts.successRate.update('none');
+                }
+
+                // Update tool usage chart
+                if (this.charts.toolUsage && data.tool_usage) {
+                    this.charts.toolUsage.data.labels = Object.keys(data.tool_usage);
+                    this.charts.toolUsage.data.datasets[0].data = Object.values(data.tool_usage);
+                    this.charts.toolUsage.update('none');
+                }
+
+                // Update activity log
+                if (data.recent_activity) {
+                    this.activityLog = data.recent_activity.slice(0, 20);
+                }
+
+            } catch (error) {
+                console.error('[Metrics Dashboard] Error fetching activity data:', error);
+            }
+        },
+
+        /**
+         * Fetch container statistics
+         */
+        async fetchContainerStats() {
+            try {
+                const response = await fetch('/api/attacks/containers');
+                const data = await response.json();
+
+                if (data.success && data.containers) {
+                    this.containerStats = data.containers.map(c => ({
+                        id: c.container_id || 'N/A',
+                        type: c.attack_type || 'unknown',
+                        status: c.status || 'unknown',
+                        cpu: this.randomInRange(5, 45),
+                        memory: this.formatBytes(this.randomInRange(100, 800) * 1024 * 1024),
+                        uptime: this.calculateUptime(c.created_at),
+                        operations: this.randomInRange(1, 15)
+                    }));
+                }
+
+                // Update CPU usage metric
+                if (this.containerStats.length > 0) {
+                    this.metrics.cpuUsage = Math.round(
+                        this.containerStats.reduce((sum, c) => sum + c.cpu, 0) / this.containerStats.length
+                    );
+                }
+
+            } catch (error) {
+                console.error('[Metrics Dashboard] Error fetching container stats:', error);
+            }
+        },
+
+        /**
+         * Generate historical data for charts
+         */
+        async generateHistoricalData() {
+            const range = this.timeRanges.find(r => r.value === this.selectedTimeRange);
+            const dataPoints = this.selectedTimeRange === '1h' ? 12 :
+                              this.selectedTimeRange === '24h' ? 24 :
+                              this.selectedTimeRange === '7d' ? 7 : 30;
+
+            // Generate time labels
+            this.historicalData.labels = [];
+            for (let i = dataPoints - 1; i >= 0; i--) {
+                const date = new Date();
+                if (this.selectedTimeRange === '1h') {
+                    date.setMinutes(date.getMinutes() - (i * 5));
+                    this.historicalData.labels.push(date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+                } else if (this.selectedTimeRange === '24h') {
+                    date.setHours(date.getHours() - i);
+                    this.historicalData.labels.push(date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+                } else {
+                    date.setDate(date.getDate() - i);
+                    this.historicalData.labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                }
+            }
+
+            // Generate synthetic data (replace with real API data)
+            this.historicalData.cpu = this.generateSyntheticData(dataPoints, 20, 80, 10);
+            this.historicalData.memory = this.generateSyntheticData(dataPoints, 40, 75, 8);
+            this.historicalData.containers = this.generateSyntheticData(dataPoints, 0, 10, 2, true);
+            this.historicalData.operations = this.generateSyntheticData(dataPoints, 5, 25, 5, true);
+
+            // Update charts
+            this.updatePerformanceChart();
+            this.updateActivityChart();
+            this.updateResourceChart();
+        },
+
+        /**
+         * Update performance chart based on selected type
+         */
+        updatePerformanceChart() {
+            if (!this.charts.performance) return;
+
+            const dataMap = {
+                'cpu': { data: this.historicalData.cpu, label: 'CPU Usage %', color: chartTheme.colors.primary },
+                'memory': { data: this.historicalData.memory, label: 'Memory Usage %', color: chartTheme.colors.warning },
+                'containers': { data: this.historicalData.containers, label: 'Active Containers', color: chartTheme.colors.success }
+            };
+
+            const selected = dataMap[this.chartType];
+            this.charts.performance.data.labels = this.historicalData.labels;
+            this.charts.performance.data.datasets[0].data = selected.data;
+            this.charts.performance.data.datasets[0].label = selected.label;
+            this.charts.performance.data.datasets[0].borderColor = selected.color;
+            this.charts.performance.data.datasets[0].backgroundColor = this.hexToRgba(selected.color, 0.1);
+
+            this.charts.performance.update('none');
+        },
+
+        /**
+         * Update activity chart
+         */
+        updateActivityChart() {
+            if (!this.charts.activity) return;
+
+            this.charts.activity.data.labels = this.historicalData.labels;
+            this.charts.activity.data.datasets[0].data = this.historicalData.operations;
+            this.charts.activity.update('none');
+        },
+
+        /**
+         * Update resource chart
+         */
+        updateResourceChart() {
+            if (!this.charts.resource) return;
+
+            this.charts.resource.data.labels = this.historicalData.labels;
+            this.charts.resource.data.datasets[0].data = this.historicalData.cpu;
+            this.charts.resource.data.datasets[1].data = this.historicalData.memory;
+            this.charts.resource.data.datasets[2].data = this.historicalData.containers;
+            this.charts.resource.update('none');
+        },
+
+        /**
+         * Set time range
+         */
+        setTimeRange(range) {
+            this.selectedTimeRange = range;
+            this.generateHistoricalData();
+        },
+
+        /**
+         * Refresh all data
+         */
+        async refreshAllData() {
+            await this.loadInitialData();
+            this.addActivity('system', 'Dashboard data refreshed', 'All metrics updated');
+        },
+
+        /**
+         * Start auto-refresh intervals
+         */
+        startAutoRefresh() {
+            // Refresh live metrics every 5 seconds
+            this.intervals.metrics = setInterval(() => {
+                this.fetchLiveMetrics();
+            }, 5000);
+
+            // Refresh activity data every 10 seconds
+            this.intervals.activity = setInterval(() => {
+                this.fetchActivityData();
+                this.fetchContainerStats();
+            }, 10000);
+
+            // Refresh charts every 30 seconds
+            this.intervals.charts = setInterval(() => {
+                this.generateHistoricalData();
+            }, 30000);
+        },
+
+        /**
+         * Export data
+         */
+        exportData(format) {
+            const data = {
+                timestamp: new Date().toISOString(),
+                metrics: this.metrics,
+                timeRange: this.selectedTimeRange,
+                containerStats: this.containerStats,
+                activityLog: this.activityLog,
+                historicalData: this.historicalData
+            };
+
+            if (format === 'json') {
+                this.downloadJSON(data);
+            } else if (format === 'csv') {
+                this.downloadCSV(data);
+            }
+
+            this.addActivity('export', `Data exported as ${format.toUpperCase()}`, `Time range: ${this.selectedTimeRange}`);
+        },
+
+        /**
+         * Download as JSON
+         */
+        downloadJSON(data) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `metrics-${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+
+        /**
+         * Download as CSV
+         */
+        downloadCSV(data) {
+            let csv = 'Metric,Value\n';
+            csv += `Active Exercises,${this.metrics.activeExercises}\n`;
+            csv += `System Health,${this.metrics.systemHealth}%\n`;
+            csv += `Running Containers,${this.metrics.runningContainers}\n`;
+            csv += `Success Rate,${this.metrics.successRate}%\n`;
+            csv += `CPU Usage,${this.metrics.cpuUsage}%\n`;
+            csv += '\n';
+
+            csv += 'Container ID,Type,Status,CPU %,Memory,Uptime,Operations\n';
+            this.containerStats.forEach(c => {
+                csv += `${c.id},${c.type},${c.status},${c.cpu},${c.memory},${c.uptime},${c.operations}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `metrics-${Date.now()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+
+        /**
+         * Add activity to log
+         */
+        addActivity(type, message, details = null) {
+            this.activityLog.unshift({
+                type,
+                message,
+                details,
+                timestamp: new Date()
+            });
+
+            // Keep only last 50 activities
+            if (this.activityLog.length > 50) {
+                this.activityLog = this.activityLog.slice(0, 50);
+            }
+        },
+
+        /**
+         * Clear activity log
+         */
+        clearActivityLog() {
+            this.activityLog = [];
+            this.addActivity('system', 'Activity log cleared');
+        },
+
+        /**
+         * Get activity icon
+         */
+        getActivityIcon(type) {
+            const icons = {
+                'system': 'bi-gear',
+                'operation': 'bi-play-circle',
+                'container': 'bi-box',
+                'export': 'bi-download',
+                'error': 'bi-exclamation-triangle',
+                'success': 'bi-check-circle'
+            };
+            return icons[type] || 'bi-info-circle';
+        },
+
+        /**
+         * Get activity color
+         */
+        getActivityColor(type) {
+            const colors = {
+                'system': chartTheme.colors.info,
+                'operation': chartTheme.colors.primary,
+                'container': chartTheme.colors.success,
+                'export': chartTheme.colors.purple,
+                'error': chartTheme.colors.danger,
+                'success': chartTheme.colors.success
+            };
+            return colors[type] || chartTheme.colors.info;
+        },
+
+        /**
+         * Get health color class
+         */
+        getHealthColor(health) {
+            if (health >= 80) return 'text-success';
+            if (health >= 50) return 'text-warning';
+            return 'text-danger';
+        },
+
+        /**
+         * Format time
+         */
+        formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        },
+
+        /**
+         * Calculate uptime
+         */
+        calculateUptime(createdAt) {
+            if (!createdAt) return 'N/A';
+
+            const created = new Date(createdAt);
+            const now = new Date();
+            const diff = Math.floor((now - created) / 1000);
+
+            const days = Math.floor(diff / 86400);
+            const hours = Math.floor((diff % 86400) / 3600);
+            const minutes = Math.floor((diff % 3600) / 60);
+
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        },
+
+        /**
+         * Format bytes
+         */
+        formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        },
+
+        /**
+         * Generate synthetic data for demo
+         */
+        generateSyntheticData(points, min, max, variance, integer = false) {
+            const data = [];
+            let current = (min + max) / 2;
+
+            for (let i = 0; i < points; i++) {
+                const change = (Math.random() - 0.5) * variance;
+                current = Math.max(min, Math.min(max, current + change));
+                data.push(integer ? Math.round(current) : parseFloat(current.toFixed(2)));
+            }
+
+            return data;
+        },
+
+        /**
+         * Random in range
+         */
+        randomInRange(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        },
+
+        /**
+         * Convert hex to rgba
+         */
+        hexToRgba(hex, alpha) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        },
+
+        /**
+         * Cleanup on destroy
+         */
+        destroy() {
+            // Clear intervals
+            Object.values(this.intervals).forEach(interval => {
+                if (interval) clearInterval(interval);
+            });
+
+            // Destroy charts
+            Object.values(this.charts).forEach(chart => {
+                if (chart) chart.destroy();
+            });
+        }
+    };
+}
+
+// Register Alpine component
+document.addEventListener('alpine:init', () => {
+    Alpine.data('metricsDashboard', metricsDashboard);
+});

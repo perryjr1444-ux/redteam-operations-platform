@@ -1,0 +1,107 @@
+{% extends "c2_base.html" %}
+
+{% block title %}Create Exercise - Red Team C2{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-military-green">CREATE NEW EXERCISE</h1>
+            <p class="text-tactical-muted font-mono text-sm mt-1">Initialize red team operation from template</p>
+        </div>
+        <a href="/templates" class="bg-tactical-border hover:bg-tactical-muted text-tactical-text px-4 py-2 rounded text-sm font-semibold transition-colors">
+            <i class="bi bi-arrow-left"></i> Back to Templates
+        </a>
+    </div>
+
+    <!-- Exercise Creation Form -->
+    <div class="max-w-2xl">
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6">
+            <!-- Template Info -->
+            <div class="mb-6 pb-6 border-b border-tactical-border">
+                <h5 class="text-sm font-semibold text-tactical-muted uppercase mb-2">Selected Template</h5>
+                <div class="flex items-center gap-3">
+                    <span class="text-xl font-bold text-military-green font-mono">{{ template.name }}</span>
+                    <span class="bg-tactical-border text-tactical-text px-2 py-1 rounded text-xs uppercase">{{ template.category }}</span>
+                    <span class="px-2 py-1 rounded text-xs font-semibold
+                        {% if template.risk_level == 'low' %}bg-status-online text-tactical-bg
+                        {% elif template.risk_level == 'medium' %}bg-military-amber text-tactical-bg
+                        {% elif template.risk_level == 'high' %}bg-military-red text-white
+                        {% else %}bg-tactical-muted text-tactical-text{% endif %}">
+                        {{ template.risk_level|upper }} RISK
+                    </span>
+                </div>
+                <code class="text-xs text-tactical-muted mt-2 block">{{ template.template_id }}</code>
+            </div>
+
+            <!-- Form -->
+            <form action="/exercise/create" method="post" class="space-y-6">
+                <input type="hidden" name="template_id" value="{{ template.template_id }}">
+
+                <!-- Scope Selection -->
+                <div>
+                    <label for="scope" class="block text-sm font-semibold text-tactical-muted mb-2 uppercase">
+                        <i class="bi bi-bullseye"></i> Operational Scope
+                    </label>
+                    <select id="scope" name="scope" required
+                            class="w-full bg-tactical-card border border-tactical-border rounded px-4 py-3 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green">
+                        <option value="lab">LAB - Isolated testing environment</option>
+                        <option value="staging">STAGING - Pre-production targets</option>
+                        <option value="production" disabled>PRODUCTION - Live systems (Requires Higher Approval)</option>
+                    </select>
+                    <p class="text-xs text-tactical-muted mt-2">
+                        <i class="bi bi-info-circle"></i> Scope determines target environment and approval requirements
+                    </p>
+                </div>
+
+                <!-- Additional Info Notice -->
+                <div class="bg-tactical-card border border-military-amber rounded p-4">
+                    <div class="flex items-start gap-3">
+                        <i class="bi bi-exclamation-triangle text-military-amber text-xl"></i>
+                        <div>
+                            <p class="text-sm text-tactical-text font-semibold mb-1">Exercise Configuration</p>
+                            <p class="text-xs text-tactical-muted">
+                                This will create a draft exercise. Additional configuration options include duration override,
+                                ROE document upload, team member assignments, and notification settings. These can be configured
+                                after creation in the exercise detail view.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Template Details -->
+                <div class="bg-tactical-card border border-tactical-border rounded p-4">
+                    <h6 class="text-sm font-semibold text-military-amber mb-3 uppercase">Template Details</h6>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-tactical-muted">Expected Duration:</span>
+                            <span class="text-military-green font-mono">{{ template.duration }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-tactical-muted">Risk Level:</span>
+                            <span class="text-military-amber font-mono">{{ template.risk_level|upper }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-tactical-muted">Category:</span>
+                            <span class="text-tactical-text font-mono">{{ template.category }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-3 pt-4 border-t border-tactical-border">
+                    <button type="submit"
+                            class="flex-1 bg-military-green hover:bg-military-green-dark text-tactical-bg px-6 py-3 rounded font-semibold transition-colors">
+                        <i class="bi bi-plus-circle"></i> Create Exercise Draft
+                    </button>
+                    <a href="/templates"
+                       class="bg-tactical-border hover:bg-tactical-muted text-tactical-text px-6 py-3 rounded font-semibold transition-colors text-center">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

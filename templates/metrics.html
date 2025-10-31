@@ -1,0 +1,29 @@
+{% extends "base_enhanced.html" %}
+
+{% block page_header %}
+  <h1 class="h2">Metrics</h1>
+{% endblock %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-12">
+      <div class="card text-white bg-dark-subtle">
+        <div class="card-body">
+          <h5 class="card-title">Live Attack Vector Success Rate</h5>
+          <div 
+            id="metrics-chart-container"
+            hx-get="/metrics-chart"
+            hx-trigger="load, every 2s"
+            hx-swap="innerHTML"
+          >
+            <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,372 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Chain Builder - Red Team C2{% endblock %}
+
+{% block extra_head %}
+<!-- D3.js for graph visualization -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<!-- Alpine.js for reactive UI -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Chain Builder CSS -->
+<link rel="stylesheet" href="/static/css/chain-builder.css">
+{% endblock %}
+
+{% block content %}
+<div x-data="chainBuilder()" x-init="init()" class="h-full flex flex-col">
+    <!-- Top Toolbar -->
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <!-- Left: Chain Name -->
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-diagram-3 text-military-green text-xl"></i>
+                    <input
+                        type="text"
+                        x-model="currentChain.name"
+                        placeholder="Untitled Chain"
+                        class="bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green"
+                        style="min-width: 250px;"
+                    >
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 bg-tactical-card border border-tactical-border rounded">
+                    <span class="text-xs text-tactical-muted font-mono">STEPS:</span>
+                    <span class="text-xs text-military-green font-mono font-bold" x-text="currentChain.steps.length"></span>
+                </div>
+            </div>
+
+            <!-- Right: Action Buttons -->
+            <div class="flex items-center gap-2">
+                <button
+                    @click="newChain()"
+                    class="px-4 py-2 bg-tactical-border hover:bg-tactical-muted text-tactical-text rounded font-semibold transition-colors flex items-center gap-2 text-sm"
+                >
+                    <i class="bi bi-file-earmark-plus"></i>
+                    <span>New</span>
+                </button>
+                <button
+                    @click="saveChain()"
+                    class="px-4 py-2 bg-military-green hover:bg-military-green-dark text-tactical-bg rounded font-semibold transition-colors flex items-center gap-2 text-sm"
+                    :disabled="!currentChain.name || currentChain.steps.length === 0"
+                    :class="{'opacity-50 cursor-not-allowed': !currentChain.name || currentChain.steps.length === 0}"
+                >
+                    <i class="bi bi-save"></i>
+                    <span>Save</span>
+                </button>
+                <button
+                    @click="executeChain()"
+                    class="px-4 py-2 bg-status-online hover:bg-military-green text-tactical-bg rounded font-semibold transition-colors flex items-center gap-2 text-sm"
+                    :disabled="currentChain.steps.length === 0"
+                    :class="{'opacity-50 cursor-not-allowed': currentChain.steps.length === 0}"
+                >
+                    <i class="bi bi-play-fill"></i>
+                    <span>Execute</span>
+                </button>
+                <button
+                    @click="deleteChain()"
+                    class="px-4 py-2 bg-military-red hover:bg-military-red-dark text-white rounded font-semibold transition-colors flex items-center gap-2 text-sm"
+                    :disabled="!currentChain.id"
+                    :class="{'opacity-50 cursor-not-allowed': !currentChain.id}"
+                >
+                    <i class="bi bi-trash"></i>
+                    <span>Delete</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three Column Layout -->
+    <div class="flex-1 grid grid-cols-12 gap-4 overflow-hidden">
+        <!-- Left Sidebar: Chain List -->
+        <div class="col-span-2 bg-tactical-surface border border-tactical-border rounded-lg overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-tactical-border">
+                <h3 class="font-display font-bold text-military-amber text-sm uppercase flex items-center gap-2">
+                    <i class="bi bi-list-ul"></i>
+                    <span>Saved Chains</span>
+                </h3>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2">
+                <template x-if="chains.length === 0">
+                    <div class="p-4 text-center text-tactical-muted text-xs">
+                        <i class="bi bi-inbox text-2xl mb-2 block"></i>
+                        <p>No saved chains</p>
+                    </div>
+                </template>
+                <template x-for="chain in chains" :key="chain.id">
+                    <div
+                        @click="loadChain(chain.id)"
+                        class="p-3 mb-2 rounded cursor-pointer transition-colors border"
+                        :class="currentChain.id === chain.id ? 'bg-military-green bg-opacity-20 border-military-green' : 'bg-tactical-card border-tactical-border hover:border-military-green'"
+                    >
+                        <div class="flex items-start justify-between mb-1">
+                            <span class="font-mono text-xs text-tactical-text font-semibold" x-text="chain.name"></span>
+                            <span class="text-xs text-tactical-muted" x-text="chain.steps.length"></span>
+                        </div>
+                        <div class="text-xs text-tactical-muted font-mono" x-text="new Date(chain.created_at).toLocaleDateString()"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Center: Visual Chain Builder Canvas -->
+        <div class="col-span-7 bg-tactical-surface border border-tactical-border rounded-lg overflow-hidden flex flex-col">
+            <div class="p-4 border-b border-tactical-border">
+                <h3 class="font-display font-bold text-military-amber text-sm uppercase flex items-center gap-2">
+                    <i class="bi bi-diagram-2"></i>
+                    <span>Chain Canvas</span>
+                </h3>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4" id="chain-canvas">
+                <template x-if="currentChain.steps.length === 0">
+                    <div class="h-full flex items-center justify-center text-tactical-muted">
+                        <div class="text-center">
+                            <i class="bi bi-plus-circle text-6xl mb-4 block"></i>
+                            <p class="text-lg mb-2">No steps in chain</p>
+                            <p class="text-sm">Drag tools from the right panel or click "Add Step"</p>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Chain Steps Display -->
+                <div class="space-y-4">
+                    <template x-for="(step, index) in currentChain.steps" :key="index">
+                        <div class="relative">
+                            <!-- Step Card -->
+                            <div
+                                class="bg-tactical-card border border-tactical-border rounded-lg p-4 hover:border-military-green transition-colors"
+                                :class="{'border-military-green': selectedStepIndex === index}"
+                                @click="selectStep(index)"
+                            >
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-start gap-3 flex-1">
+                                        <!-- Step Number Badge -->
+                                        <div class="flex-shrink-0 w-8 h-8 bg-military-green text-tactical-bg rounded-full flex items-center justify-center font-bold text-sm">
+                                            <span x-text="index + 1"></span>
+                                        </div>
+
+                                        <!-- Step Details -->
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <i class="bi bi-wrench-adjustable text-military-amber"></i>
+                                                <span class="font-mono text-sm text-tactical-text font-semibold" x-text="step.tool"></span>
+                                                <span
+                                                    class="px-2 py-1 text-xs rounded font-mono"
+                                                    :class="step.type === 'recon' ? 'bg-status-active bg-opacity-20 text-status-active' :
+                                                            step.type === 'exploit' ? 'bg-military-red bg-opacity-20 text-military-red' :
+                                                            step.type === 'post-exploit' ? 'bg-military-amber bg-opacity-20 text-military-amber' :
+                                                            'bg-military-green bg-opacity-20 text-military-green'"
+                                                    x-text="step.type"
+                                                ></span>
+                                            </div>
+
+                                            <div class="text-xs text-tactical-muted font-mono mb-2">
+                                                <span>Target: </span>
+                                                <code class="text-military-green" x-text="step.target || 'Not set'"></code>
+                                            </div>
+
+                                            <template x-if="step.parameters && Object.keys(step.parameters).length > 0">
+                                                <div class="text-xs text-tactical-muted">
+                                                    <span x-text="Object.keys(step.parameters).length"></span> parameter(s) configured
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="flex gap-1 ml-2">
+                                        <button
+                                            @click.stop="moveStepUp(index)"
+                                            class="w-6 h-6 bg-tactical-border hover:bg-military-green text-tactical-text hover:text-tactical-bg rounded transition-colors flex items-center justify-center"
+                                            :disabled="index === 0"
+                                            :class="{'opacity-50 cursor-not-allowed': index === 0}"
+                                        >
+                                            <i class="bi bi-arrow-up text-xs"></i>
+                                        </button>
+                                        <button
+                                            @click.stop="moveStepDown(index)"
+                                            class="w-6 h-6 bg-tactical-border hover:bg-military-green text-tactical-text hover:text-tactical-bg rounded transition-colors flex items-center justify-center"
+                                            :disabled="index === currentChain.steps.length - 1"
+                                            :class="{'opacity-50 cursor-not-allowed': index === currentChain.steps.length - 1}"
+                                        >
+                                            <i class="bi bi-arrow-down text-xs"></i>
+                                        </button>
+                                        <button
+                                            @click.stop="deleteStep(index)"
+                                            class="w-6 h-6 bg-military-red hover:bg-military-red-dark text-white rounded transition-colors flex items-center justify-center"
+                                        >
+                                            <i class="bi bi-x text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Connector Arrow -->
+                            <template x-if="index < currentChain.steps.length - 1">
+                                <div class="flex justify-center py-2">
+                                    <i class="bi bi-arrow-down text-military-green text-xl"></i>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Step Configuration & Tool Palette -->
+        <div class="col-span-3 bg-tactical-surface border border-tactical-border rounded-lg overflow-hidden flex flex-col">
+            <!-- Tab Header -->
+            <div class="border-b border-tactical-border">
+                <div class="flex">
+                    <button
+                        @click="rightPanelTab = 'tools'"
+                        class="flex-1 px-4 py-3 font-mono text-xs uppercase transition-colors"
+                        :class="rightPanelTab === 'tools' ? 'bg-tactical-card text-military-amber border-b-2 border-military-amber' : 'text-tactical-muted hover:text-tactical-text'"
+                    >
+                        <i class="bi bi-wrench-adjustable"></i> Tools
+                    </button>
+                    <button
+                        @click="rightPanelTab = 'config'"
+                        class="flex-1 px-4 py-3 font-mono text-xs uppercase transition-colors"
+                        :class="rightPanelTab === 'config' ? 'bg-tactical-card text-military-amber border-b-2 border-military-amber' : 'text-tactical-muted hover:text-tactical-text'"
+                        :disabled="selectedStepIndex === null || selectedStepIndex < 0"
+                    >
+                        <i class="bi bi-gear"></i> Config
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="flex-1 overflow-y-auto">
+                <!-- Tools Tab -->
+                <div x-show="rightPanelTab === 'tools'" class="p-4">
+                    <div class="mb-4">
+                        <input
+                            type="text"
+                            x-model="toolSearch"
+                            placeholder="Search tools..."
+                            class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-xs focus:outline-none focus:border-military-green"
+                        >
+                    </div>
+
+                    <!-- Tool Categories -->
+                    <template x-for="category in toolCategories" :key="category.name">
+                        <div class="mb-4">
+                            <h4 class="text-xs font-semibold text-military-amber uppercase mb-2 font-mono" x-text="category.name"></h4>
+                            <div class="space-y-2">
+                                <template x-for="tool in filterTools(category.tools)" :key="tool.name">
+                                    <div
+                                        @click="addStepFromTool(tool)"
+                                        class="bg-tactical-card border border-tactical-border rounded p-3 cursor-pointer hover:border-military-green transition-colors"
+                                    >
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="font-mono text-xs text-tactical-text font-semibold" x-text="tool.name"></span>
+                                            <i class="bi bi-plus-circle text-military-green"></i>
+                                        </div>
+                                        <p class="text-xs text-tactical-muted" x-text="tool.description"></p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Configuration Tab -->
+                <div x-show="rightPanelTab === 'config'" class="p-4">
+                    <template x-if="selectedStepIndex !== null && selectedStepIndex >= 0 && currentChain.steps[selectedStepIndex]">
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="text-xs font-semibold text-military-amber uppercase mb-3 font-mono">Step Configuration</h4>
+                            </div>
+
+                            <!-- Tool Name -->
+                            <div>
+                                <label class="block text-xs font-semibold text-tactical-muted mb-2 font-mono">Tool</label>
+                                <input
+                                    type="text"
+                                    x-model="currentChain.steps[selectedStepIndex].tool"
+                                    class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-xs focus:outline-none focus:border-military-green"
+                                    readonly
+                                >
+                            </div>
+
+                            <!-- Target -->
+                            <div>
+                                <label class="block text-xs font-semibold text-tactical-muted mb-2 font-mono">Target</label>
+                                <input
+                                    type="text"
+                                    x-model="currentChain.steps[selectedStepIndex].target"
+                                    placeholder="e.g., 192.168.1.1, example.com"
+                                    class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-xs focus:outline-none focus:border-military-green"
+                                >
+                            </div>
+
+                            <!-- Type -->
+                            <div>
+                                <label class="block text-xs font-semibold text-tactical-muted mb-2 font-mono">Type</label>
+                                <select
+                                    x-model="currentChain.steps[selectedStepIndex].type"
+                                    class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-xs focus:outline-none focus:border-military-green"
+                                >
+                                    <option value="recon">Recon</option>
+                                    <option value="scan">Scan</option>
+                                    <option value="exploit">Exploit</option>
+                                    <option value="post-exploit">Post-Exploit</option>
+                                </select>
+                            </div>
+
+                            <!-- Parameters -->
+                            <div>
+                                <label class="block text-xs font-semibold text-tactical-muted mb-2 font-mono">Parameters (JSON)</label>
+                                <textarea
+                                    x-model="currentChain.steps[selectedStepIndex].parametersJson"
+                                    @input="updateStepParameters(selectedStepIndex)"
+                                    rows="6"
+                                    placeholder='{"port": "80", "threads": "10"}'
+                                    class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-xs focus:outline-none focus:border-military-green"
+                                ></textarea>
+                                <p class="text-xs text-tactical-muted mt-1">Enter valid JSON format</p>
+                            </div>
+
+                            <!-- Timeout -->
+                            <div>
+                                <label class="block text-xs font-semibold text-tactical-muted mb-2 font-mono">Timeout (seconds)</label>
+                                <input
+                                    type="number"
+                                    x-model.number="currentChain.steps[selectedStepIndex].timeout"
+                                    min="0"
+                                    class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-xs focus:outline-none focus:border-military-green"
+                                >
+                            </div>
+
+                            <!-- Continue on Error -->
+                            <div class="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    x-model="currentChain.steps[selectedStepIndex].continue_on_error"
+                                    id="continue-error"
+                                    class="w-4 h-4 bg-tactical-card border border-tactical-border rounded focus:ring-military-green"
+                                >
+                                <label for="continue-error" class="text-xs text-tactical-muted font-mono cursor-pointer">
+                                    Continue chain if this step fails
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="selectedStepIndex === null || selectedStepIndex < 0">
+                        <div class="text-center text-tactical-muted py-8">
+                            <i class="bi bi-gear text-4xl mb-2 block"></i>
+                            <p class="text-xs">Select a step to configure</p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://unpkg.com/notyf@3/notyf.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/notyf@3/notyf.min.css">
+<script src="/static/js/chain-builder.js"></script>
+{% endblock %}

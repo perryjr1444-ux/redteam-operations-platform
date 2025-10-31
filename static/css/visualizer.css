@@ -1,0 +1,279 @@
+/**
+ * Fractal Execution Visualizer Styles
+ * Professional, minimal, high-contrast design
+ */
+
+/* Visualizer Container */
+#fractalVisualizer {
+  position: relative;
+  background: #0a0e1a;
+  cursor: grab;
+}
+
+#fractalVisualizer:active {
+  cursor: grabbing;
+}
+
+/* SVG Styles */
+.fractal-visualizer {
+  width: 100%;
+  height: 100%;
+}
+
+/* Tree Links */
+.link {
+  fill: none;
+  stroke-opacity: 0.6;
+  transition: stroke-opacity 0.3s ease;
+}
+
+.link:hover {
+  stroke-opacity: 1;
+  stroke-width: 3px !important;
+}
+
+/* Tree Nodes */
+.node {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.node:hover circle {
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+
+.node circle {
+  transition: all 0.3s ease;
+}
+
+/* Node Labels */
+.node-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  pointer-events: none;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.node-icon {
+  pointer-events: none;
+  user-select: none;
+}
+
+.level-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+/* Tooltip */
+.fractal-tooltip {
+  position: absolute;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid rgba(0, 255, 0, 0.5);
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  max-width: 300px;
+}
+
+.tooltip-header {
+  font-weight: bold;
+  color: #00ff00;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.tooltip-body div {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.tooltip-body strong {
+  color: #a0a0a0;
+  margin-right: 8px;
+}
+
+/* Node Details Panel */
+.node-details {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-row code {
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* Stats */
+.stat-item {
+  border-left: 3px solid rgba(0, 255, 0, 0.3);
+  padding-left: 12px;
+}
+
+/* Legend */
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Status Colors */
+.status-pending {
+  color: #6c757d;
+}
+
+.status-running {
+  color: #0dcaf0;
+}
+
+.status-completed {
+  color: #198754;
+}
+
+.status-failed {
+  color: #dc3545;
+}
+
+/* Level Colors */
+.level-strategic {
+  color: #7c3aed;
+}
+
+.level-tactical {
+  color: #2563eb;
+}
+
+.level-operational {
+  color: #059669;
+}
+
+/* Execution Selector */
+#executionSelect,
+#statusFilter,
+#viewMode {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+}
+
+/* WebSocket Status */
+#wsStatus {
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading Overlay */
+#loadingOverlay {
+  backdrop-filter: blur(5px);
+}
+
+/* Empty State */
+#emptyState i {
+  color: rgba(108, 117, 125, 0.3);
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.node circle[data-status="running"] {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  #fractalVisualizer {
+    height: 500px !important;
+  }
+
+  .node-label {
+    font-size: 9px;
+  }
+
+  .tooltip-body {
+    font-size: 10px;
+  }
+}
+
+/* Glow Effects for Active Nodes */
+.node-glow {
+  filter: drop-shadow(0 0 10px currentColor);
+}
+
+/* Zoom Controls (if added) */
+.zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zoom-controls button {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 255, 0, 0.5);
+  background: rgba(0, 0, 0, 0.8);
+  color: #00ff00;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.zoom-controls button:hover {
+  background: rgba(0, 255, 0, 0.1);
+  border-color: #00ff00;
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.3);
+}
+
+/* Mini-map (future enhancement) */
+.minimap {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 150px;
+  height: 100px;
+  border: 1px solid rgba(0, 255, 0, 0.5);
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 100;
+}
+
+/* Performance Optimizations */
+.node,
+.link {
+  will-change: transform, opacity;
+}
+
+/* Dark mode overrides (ensure consistency) */
+.card.bg-dark {
+  background: #0f1419 !important;
+}
+
+.form-select.bg-dark {
+  background-color: #0f1419 !important;
+}
+
+.form-select.bg-dark option {
+  background-color: #0f1419;
+  color: #e0e0e0;
+}

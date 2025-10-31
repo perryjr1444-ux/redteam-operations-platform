@@ -1,0 +1,37 @@
+
+{% extends "base_enhanced.html" %}
+
+{% block page_header %}
+  <h1 class="h2">Create New Exercise</h1>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8">
+    <div class="card text-white bg-dark-subtle">
+      <div class="card-body">
+        <h5 class="card-title">From Template: <span class="text-primary">{{ template.name }}</span></h5>
+        <form action="/exercise/create" method="post" class="mt-4">
+          <input type="hidden" name="template_id" value="{{ template.template_id }}">
+          
+          <div class="mb-3">
+            <label for="scope" class="form-label">Scope</label>
+            <select class="form-select" id="scope" name="scope" required>
+              <option value="lab">Lab</option>
+              <option value="staging">Staging</option>
+              <option value="production" disabled>Production (Requires Higher Approval)</option>
+            </select>
+          </div>
+
+          <p class="form-text">Additional fields like duration override, ROE document upload, etc., would be included in a full implementation.</p>
+
+          <hr class="my-4">
+
+          <button type="submit" class="btn btn-primary">Create Exercise Draft</button>
+          <a href="/templates" class="btn btn-secondary">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

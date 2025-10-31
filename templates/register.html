@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register - Red Team Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+    <style>
+      body {
+        background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .register-card {
+        max-width: 500px;
+        width: 100%;
+        backdrop-filter: blur(10px);
+        background: rgba(30, 30, 46, 0.9);
+        border: 1px solid rgba(233, 30, 99, 0.3);
+        box-shadow: 0 8px 32px 0 rgba(233, 30, 99, 0.2);
+      }
+      .brand-title {
+        font-family: 'Orbitron', sans-serif;
+        font-weight: 700;
+        color: #e91e63;
+        font-size: 2.5rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+      }
+      .brand-subtitle {
+        text-align: center;
+        color: #888;
+        margin-bottom: 2rem;
+        font-size: 0.9rem;
+      }
+      .form-control:focus {
+        border-color: #e91e63;
+        box-shadow: 0 0 0 0.25rem rgba(233, 30, 99, 0.25);
+      }
+      .btn-primary {
+        background-color: #e91e63;
+        border-color: #e91e63;
+      }
+      .btn-primary:hover {
+        background-color: #c2185b;
+        border-color: #c2185b;
+      }
+      .password-strength {
+        height: 4px;
+        margin-top: 0.5rem;
+        background-color: #333;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .password-strength-bar {
+        height: 100%;
+        transition: all 0.3s;
+        width: 0%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-md-7">
+          <div class="card register-card">
+            <div class="card-body p-5">
+              <div class="brand-title">
+                RED<span style="color: #fff;">TEAM</span> C2
+              </div>
+              <div class="brand-subtitle">
+                <i class="bi bi-person-plus"></i> Create Your Account
+              </div>
+
+              <form id="registerForm">
+                <div class="mb-3">
+                  <label for="username" class="form-label">Username</label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input type="text" class="form-control" id="username" name="username" required autofocus>
+                  </div>
+                  <small class="text-muted">Alphanumeric characters only</small>
+                </div>
+
+                <div class="mb-3">
+                  <label for="email" class="form-label">Email</label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label for="full_name" class="form-label">Full Name (Optional)</label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-card-text"></i></span>
+                    <input type="text" class="form-control" id="full_name" name="full_name">
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label for="password" class="form-label">Password</label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                  </div>
+                  <div class="password-strength">
+                    <div class="password-strength-bar" id="strengthBar"></div>
+                  </div>
+                  <small class="text-muted">Minimum 8 characters</small>
+                </div>
+
+                <div class="mb-4">
+                  <label for="confirm_password" class="form-label">Confirm Password</label>
+                  <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                  </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mb-3">
+                  <i class="bi bi-person-check"></i> Create Account
+                </button>
+
+                <div class="text-center">
+                  <small class="text-muted">
+                    Already have an account? <a href="/login" class="text-decoration-none">Login here</a>
+                  </small>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+    <script>
+      const notyf = new Notyf({
+        duration: 4000,
+        position: { x: 'right', y: 'top' }
+      });
+
+      // Password strength indicator
+      document.getElementById('password').addEventListener('input', (e) => {
+        const password = e.target.value;
+        const strengthBar = document.getElementById('strengthBar');
+
+        let strength = 0;
+        if (password.length >= 8) strength += 25;
+        if (password.length >= 12) strength += 25;
+        if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 25;
+        if (/[0-9]/.test(password) && /[^a-zA-Z0-9]/.test(password)) strength += 25;
+
+        strengthBar.style.width = strength + '%';
+
+        if (strength < 50) {
+          strengthBar.style.backgroundColor = '#dc3545';
+        } else if (strength < 75) {
+          strengthBar.style.backgroundColor = '#ffc107';
+        } else {
+          strengthBar.style.backgroundColor = '#28a745';
+        }
+      });
+
+      document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value;
+        const email = document.getElementById('email').value;
+        const full_name = document.getElementById('full_name').value;
+        const password = document.getElementById('password').value;
+        const confirm_password = document.getElementById('confirm_password').value;
+
+        // Validate passwords match
+        if (password !== confirm_password) {
+          notyf.error('Passwords do not match');
+          return;
+        }
+
+        // Validate password length
+        if (password.length < 8) {
+          notyf.error('Password must be at least 8 characters long');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, email, password, full_name })
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            notyf.success('Registration successful! Redirecting to login...');
+
+            setTimeout(() => {
+              window.location.href = '/login';
+            }, 1500);
+          } else {
+            notyf.error(data.detail || 'Registration failed');
+          }
+        } catch (error) {
+          notyf.error('An error occurred during registration');
+          console.error('Registration error:', error);
+        }
+      });
+    </script>
+  </body>
+</html>

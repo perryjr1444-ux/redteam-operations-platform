@@ -1,0 +1,138 @@
+
+{% extends "base_enhanced.html" %}
+
+{% block page_header %}
+  <h1 class="h2">Dashboard</h1>
+{% endblock %}
+
+{% block content %}
+  <div class="p-5 mb-4 rounded-3" style="background-image: url('/static/images/dashboard-bg.jpg'); background-size: cover; background-position: center;">
+    <div class="container-fluid py-5 bg-dark bg-opacity-75 rounded-3">
+      <h1 class="display-5 fw-bold">Welcome to the Red Team Command Center</h1>
+      <p class="col-md-8 fs-4">This interface provides a centralized hub for planning, executing, and monitoring red team exercises. Select a module from the sidebar to begin.</p>
+      <a href="/exercises" class="btn btn-primary btn-lg">Go to Exercises</a>
+    </div>
+  </div>
+
+  <!-- Live Metrics Cards with Cyberpunk Theme -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-3">
+      <div class="metric-card">
+        <i class="metric-icon bi bi-shield-check"></i>
+        <div class="metric-label">Active Exercises</div>
+        <div class="metric-value" id="active-exercises">0</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="metric-card">
+        <i class="metric-icon bi bi-heart-pulse"></i>
+        <div class="metric-label">System Health</div>
+        <div class="metric-value" id="system-health">0%</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="metric-card">
+        <i class="metric-icon bi bi-boxes"></i>
+        <div class="metric-label">Running Containers</div>
+        <div class="metric-value" id="running-containers">0</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="metric-card">
+        <i class="metric-icon bi bi-clock-history"></i>
+        <div class="metric-label">Uptime</div>
+        <div class="metric-value" id="uptime" style="font-size: 1.8rem;">0d</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cyberpunk Charts -->
+  <div class="row g-4">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-graph-up"></i> Exercise Activity Timeline
+        </div>
+        <div class="card-body">
+          <div style="height: 300px;">
+            <canvas id="activityChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-pie-chart-fill"></i> Attack Success Rate
+        </div>
+        <div class="card-body">
+          <div style="height: 300px;">
+            <canvas id="successChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <h5 class="mb-3 text-light"><i class="bi bi-clock-history"></i> Recent Activity</h5>
+      <ul class="timeline">
+        <li class="timeline-item">
+          <div class="timeline-icon"><i class="bi bi-check-circle"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">Exercise ex-20251015-001 started</h6>
+            <small class="text-muted">2 minutes ago</small>
+            <p class="mb-1">APT Emulation Attack Chain initiated by j.doe</p>
+          </div>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-icon"><i class="bi bi-check-circle"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">System health check passed</h6>
+            <small class="text-muted">5 minutes ago</small>
+            <p class="mb-1">All components operational</p>
+          </div>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-icon"><i class="bi bi-file-earmark-text"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">New finding generated</h6>
+            <small class="text-muted">12 minutes ago</small>
+            <p class="mb-1">Credential exposure detected in exercise ex-20251014-005</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Initialize dashboard on load
+  window.addEventListener('DOMContentLoaded', function() {
+    // Animate metric counters using charts.js functions
+    const activeExEl = document.getElementById('active-exercises');
+    const systemHealthEl = document.getElementById('system-health');
+    const containersEl = document.getElementById('running-containers');
+
+    animateCounter(activeExEl, 5, 2000);
+    systemHealthEl.textContent = '98%';
+    animateCounter(containersEl, 3, 2000);
+    document.getElementById('uptime').textContent = '7h';
+
+    // Create Activity Timeline Chart
+    createTimelineChart('activityChart', {
+      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      values: [3, 5, 2, 8, 6, 4, 7]
+    });
+
+    // Create Success Rate Chart
+    createSuccessRateChart('successChart', 75);
+
+    // Auto-update metrics every 5 seconds
+    // This is handled by charts.js updateLiveMetrics()
+  });
+</script>
+{% endblock %}

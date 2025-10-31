@@ -1,0 +1,577 @@
+/**
+ * AI Agents Dashboard - Alpine.js Component
+ * Comprehensive agent monitoring, control, and interaction
+ */
+
+/**
+ * Main Agent Dashboard Component
+ */
+function agentDashboard() {
+    return {
+        // Agent data
+        agents: [],
+        selectedAgent: '',
+        agentQuery: '',
+        agentResponse: '',
+        isQuerying: false,
+        isRefreshing: false,
+
+        // Statistics
+        stats: {
+            totalAgents: 0,
+            healthyAgents: 0,
+            unhealthyAgents: 0,
+            avgResponseTime: 0,
+            totalRequests: 0,
+            avgUptime: 0
+        },
+
+        // Activity log
+        activityLog: [],
+        maxLogEntries: 50,
+
+        // Charts
+        responseTimeChart: null,
+        healthChart: null,
+
+        // WebSocket connection
+        ws: null,
+        wsReconnectAttempts: 0,
+        maxReconnectAttempts: 5,
+
+        // Auto-refresh interval
+        refreshInterval: null,
+
+        /**
+         * Initialize the dashboard
+         */
+        async init() {
+            console.log('[Agent Dashboard] Initializing...');
+
+            // Initial data load
+            await this.fetchAgentStatus();
+
+            // Initialize charts
+            this.initializeCharts();
+
+            // Start auto-refresh
+            this.startAutoRefresh();
+
+            // Initialize WebSocket for real-time updates
+            this.initializeWebSocket();
+
+            // Add initial activity log entry
+            this.addActivityLog('system', 'info', 'Agent dashboard initialized');
+
+            console.log('[Agent Dashboard] Initialization complete');
+        },
+
+        /**
+         * Fetch agent status from API
+         */
+        async fetchAgentStatus() {
+            try {
+                const response = await fetch('/api/ai/agents/status');
+                const data = await response.json();
+
+                if (data.agents) {
+                    // Convert agents object to array
+                    this.agents = Object.entries(data.agents).map(([type, status]) => ({
+                        type: type,
+                        ...status
+                    }));
+
+                    // Calculate statistics
+                    this.calculateStatistics();
+
+                    // Update charts
+                    this.updateCharts();
+
+                    // Log successful fetch
+                    this.addActivityLog('system', 'success', `Fetched status for ${this.agents.length} agents`);
+                }
+            } catch (error) {
+                console.error('[Agent Dashboard] Error fetching agent status:', error);
+                this.addActivityLog('system', 'error', 'Failed to fetch agent status');
+
+                // Show notification
+                if (Alpine.store('notifications')) {
+                    Alpine.store('notifications').error('Failed to fetch agent status');
+                }
+            }
+        },
+
+        /**
+         * Calculate dashboard statistics
+         */
+        calculateStatistics() {
+            this.stats.totalAgents = this.agents.length;
+            this.stats.healthyAgents = this.agents.filter(a => a.is_healthy).length;
+            this.stats.unhealthyAgents = this.agents.filter(a => !a.is_healthy).length;
+
+            // Calculate average response time
+            const responseTimes = this.agents.map(a => a.avg_response_time || 0);
+            this.stats.avgResponseTime = responseTimes.length > 0
+                ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+                : 0;
+
+            // Calculate average uptime
+            const uptimes = this.agents.map(a => a.uptime_percentage || 0);
+            this.stats.avgUptime = uptimes.length > 0
+                ? uptimes.reduce((a, b) => a + b, 0) / uptimes.length
+                : 0;
+
+            // Total requests (mock calculation)
+            this.stats.totalRequests = this.agents.reduce((sum, a) => sum + (a.error_count || 0) * 10, 0);
+        },
+
+        /**
+         * Initialize Chart.js charts
+         */
+        initializeCharts() {
+            // Response Time Chart
+            const responseCtx = document.getElementById('responseTimeChart');
+            if (responseCtx) {
+                this.responseTimeChart = new Chart(responseCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Response Time (ms)',
+                            data: [],
+                            backgroundColor: 'rgba(0, 255, 0, 0.2)',
+                            borderColor: '#00ff00',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#00ff00' },
+                                grid: { color: 'rgba(0, 255, 0, 0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#00ff00' },
+                                grid: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: { color: '#00ff00' }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(10, 14, 26, 0.9)',
+                                titleColor: '#00ff00',
+                                bodyColor: '#00ffff',
+                                borderColor: '#00ff00',
+                                borderWidth: 1
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Health Status Chart
+            const healthCtx = document.getElementById('healthChart');
+            if (healthCtx) {
+                this.healthChart = new Chart(healthCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Healthy', 'Unhealthy'],
+                        datasets: [{
+                            data: [0, 0],
+                            backgroundColor: ['#00ff00', '#ff0040'],
+                            borderColor: ['#00ff00', '#ff0040'],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#00ff00',
+                                    font: { size: 12, weight: 'bold' },
+                                    padding: 15
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(10, 14, 26, 0.9)',
+                                titleColor: '#00ff00',
+                                bodyColor: '#00ffff',
+                                borderColor: '#00ff00',
+                                borderWidth: 1
+                            }
+                        }
+                    }
+                });
+            }
+        },
+
+        /**
+         * Update charts with current agent data
+         */
+        updateCharts() {
+            // Update Response Time Chart
+            if (this.responseTimeChart && this.agents.length > 0) {
+                this.responseTimeChart.data.labels = this.agents.map(a => this.formatAgentName(a.type));
+                this.responseTimeChart.data.datasets[0].data = this.agents.map(a => a.avg_response_time || 0);
+
+                // Color bars based on response time
+                this.responseTimeChart.data.datasets[0].backgroundColor = this.agents.map(a => {
+                    const time = a.avg_response_time || 0;
+                    if (time < 100) return 'rgba(0, 255, 0, 0.3)';
+                    if (time < 500) return 'rgba(255, 255, 0, 0.3)';
+                    return 'rgba(255, 0, 64, 0.3)';
+                });
+                this.responseTimeChart.data.datasets[0].borderColor = this.agents.map(a => {
+                    const time = a.avg_response_time || 0;
+                    if (time < 100) return '#00ff00';
+                    if (time < 500) return '#ffff00';
+                    return '#ff0040';
+                });
+
+                this.responseTimeChart.update('active');
+            }
+
+            // Update Health Status Chart
+            if (this.healthChart) {
+                this.healthChart.data.datasets[0].data = [
+                    this.stats.healthyAgents,
+                    this.stats.unhealthyAgents
+                ];
+                this.healthChart.update('active');
+            }
+        },
+
+        /**
+         * Start auto-refresh interval
+         */
+        startAutoRefresh() {
+            // Refresh every 10 seconds
+            this.refreshInterval = setInterval(async () => {
+                await this.fetchAgentStatus();
+            }, 10000);
+
+            console.log('[Agent Dashboard] Auto-refresh started (10s interval)');
+        },
+
+        /**
+         * Manual refresh all data
+         */
+        async refreshAll() {
+            this.isRefreshing = true;
+            await this.fetchAgentStatus();
+            this.isRefreshing = false;
+
+            if (Alpine.store('notifications')) {
+                Alpine.store('notifications').success('Dashboard refreshed');
+            }
+        },
+
+        /**
+         * Initialize WebSocket connection for real-time updates
+         */
+        initializeWebSocket() {
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/agents`;
+
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    console.log('[Agent Dashboard] WebSocket connected');
+                    this.wsReconnectAttempts = 0;
+                    this.addActivityLog('system', 'success', 'Real-time updates connected');
+                };
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        this.handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.error('[Agent Dashboard] Error parsing WebSocket message:', error);
+                    }
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('[Agent Dashboard] WebSocket error:', error);
+                    this.addActivityLog('system', 'error', 'WebSocket connection error');
+                };
+
+                this.ws.onclose = () => {
+                    console.log('[Agent Dashboard] WebSocket disconnected');
+                    this.addActivityLog('system', 'warning', 'Real-time updates disconnected');
+
+                    // Attempt reconnection
+                    if (this.wsReconnectAttempts < this.maxReconnectAttempts) {
+                        setTimeout(() => {
+                            this.wsReconnectAttempts++;
+                            console.log(`[Agent Dashboard] Reconnecting... (${this.wsReconnectAttempts}/${this.maxReconnectAttempts})`);
+                            this.initializeWebSocket();
+                        }, 3000 * this.wsReconnectAttempts);
+                    }
+                };
+            } catch (error) {
+                console.error('[Agent Dashboard] Error initializing WebSocket:', error);
+            }
+        },
+
+        /**
+         * Handle incoming WebSocket messages
+         */
+        handleWebSocketMessage(data) {
+            console.log('[Agent Dashboard] WebSocket message:', data);
+
+            switch (data.type) {
+                case 'agent_status_update':
+                    // Update specific agent status
+                    const agentIndex = this.agents.findIndex(a => a.type === data.agent_type);
+                    if (agentIndex !== -1) {
+                        this.agents[agentIndex] = { ...this.agents[agentIndex], ...data.status };
+                        this.calculateStatistics();
+                        this.updateCharts();
+                    }
+                    break;
+
+                case 'agent_event':
+                    // Log agent event
+                    this.addActivityLog(data.agent_type, data.level || 'info', data.message);
+                    break;
+
+                case 'agent_response':
+                    // Handle agent query response
+                    if (data.query_id === this.currentQueryId) {
+                        this.agentResponse = data.response;
+                        this.isQuerying = false;
+                    }
+                    break;
+
+                default:
+                    console.log('[Agent Dashboard] Unknown message type:', data.type);
+            }
+        },
+
+        /**
+         * Start an agent
+         */
+        async startAgent(agentType) {
+            try {
+                const response = await fetch(`/api/ai/agents/${agentType}/start`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    this.addActivityLog(agentType, 'success', 'Agent started successfully');
+                    if (Alpine.store('notifications')) {
+                        Alpine.store('notifications').success(`${this.formatAgentName(agentType)} started`);
+                    }
+                    await this.fetchAgentStatus();
+                } else {
+                    throw new Error('Failed to start agent');
+                }
+            } catch (error) {
+                console.error(`[Agent Dashboard] Error starting agent ${agentType}:`, error);
+                this.addActivityLog(agentType, 'error', 'Failed to start agent');
+                if (Alpine.store('notifications')) {
+                    Alpine.store('notifications').error(`Failed to start ${this.formatAgentName(agentType)}`);
+                }
+            }
+        },
+
+        /**
+         * Stop an agent
+         */
+        async stopAgent(agentType) {
+            try {
+                const response = await fetch(`/api/ai/agents/${agentType}/stop`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    this.addActivityLog(agentType, 'warning', 'Agent stopped');
+                    if (Alpine.store('notifications')) {
+                        Alpine.store('notifications').warning(`${this.formatAgentName(agentType)} stopped`);
+                    }
+                    await this.fetchAgentStatus();
+                } else {
+                    throw new Error('Failed to stop agent');
+                }
+            } catch (error) {
+                console.error(`[Agent Dashboard] Error stopping agent ${agentType}:`, error);
+                this.addActivityLog(agentType, 'error', 'Failed to stop agent');
+                if (Alpine.store('notifications')) {
+                    Alpine.store('notifications').error(`Failed to stop ${this.formatAgentName(agentType)}`);
+                }
+            }
+        },
+
+        /**
+         * Restart an agent
+         */
+        async restartAgent(agentType) {
+            try {
+                const response = await fetch(`/api/ai/agents/${agentType}/restart`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    this.addActivityLog(agentType, 'info', 'Agent restarting...');
+                    if (Alpine.store('notifications')) {
+                        Alpine.store('notifications').info(`${this.formatAgentName(agentType)} restarting...`);
+                    }
+                    await this.fetchAgentStatus();
+                } else {
+                    throw new Error('Failed to restart agent');
+                }
+            } catch (error) {
+                console.error(`[Agent Dashboard] Error restarting agent ${agentType}:`, error);
+                this.addActivityLog(agentType, 'error', 'Failed to restart agent');
+                if (Alpine.store('notifications')) {
+                    Alpine.store('notifications').error(`Failed to restart ${this.formatAgentName(agentType)}`);
+                }
+            }
+        },
+
+        /**
+         * Send query to selected agent
+         */
+        async sendAgentQuery() {
+            if (!this.selectedAgent || !this.agentQuery) return;
+
+            this.isQuerying = true;
+            this.agentResponse = 'Processing query...';
+            this.currentQueryId = Date.now();
+
+            try {
+                const response = await fetch(`/api/ai/agents/${this.selectedAgent}/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: this.agentQuery,
+                        query_id: this.currentQueryId
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    this.agentResponse = data.response || 'No response received';
+                    this.addActivityLog(this.selectedAgent, 'success', `Query executed: ${this.agentQuery.substring(0, 50)}...`);
+                } else {
+                    throw new Error('Query failed');
+                }
+            } catch (error) {
+                console.error('[Agent Dashboard] Error sending query:', error);
+                this.agentResponse = `Error: ${error.message}`;
+                this.addActivityLog(this.selectedAgent, 'error', 'Query failed');
+                if (Alpine.store('notifications')) {
+                    Alpine.store('notifications').error('Failed to send query to agent');
+                }
+            } finally {
+                this.isQuerying = false;
+            }
+        },
+
+        /**
+         * Add entry to activity log
+         */
+        addActivityLog(agent, level, message) {
+            const entry = {
+                id: Date.now() + Math.random(),
+                timestamp: new Date().toISOString(),
+                agent: agent,
+                level: level, // info, success, warning, error
+                message: message
+            };
+
+            this.activityLog.unshift(entry);
+
+            // Limit log entries
+            if (this.activityLog.length > this.maxLogEntries) {
+                this.activityLog = this.activityLog.slice(0, this.maxLogEntries);
+            }
+        },
+
+        /**
+         * Clear activity log
+         */
+        clearActivityLog() {
+            this.activityLog = [];
+            this.addActivityLog('system', 'info', 'Activity log cleared');
+        },
+
+        /**
+         * Format agent type name
+         */
+        formatAgentName(agentType) {
+            if (!agentType) return 'Unknown';
+
+            // Convert snake_case to Title Case
+            return agentType
+                .split('_')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        },
+
+        /**
+         * Format timestamp
+         */
+        formatTime(timestamp) {
+            if (!timestamp) return 'N/A';
+
+            try {
+                const date = new Date(timestamp);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffSecs = Math.floor(diffMs / 1000);
+                const diffMins = Math.floor(diffSecs / 60);
+                const diffHours = Math.floor(diffMins / 60);
+
+                if (diffSecs < 60) return `${diffSecs}s ago`;
+                if (diffMins < 60) return `${diffMins}m ago`;
+                if (diffHours < 24) return `${diffHours}h ago`;
+
+                return date.toLocaleTimeString();
+            } catch (error) {
+                return 'Invalid date';
+            }
+        },
+
+        /**
+         * Cleanup on component destroy
+         */
+        destroy() {
+            // Clear intervals
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+            }
+
+            // Close WebSocket
+            if (this.ws) {
+                this.ws.close();
+            }
+
+            // Destroy charts
+            if (this.responseTimeChart) {
+                this.responseTimeChart.destroy();
+            }
+            if (this.healthChart) {
+                this.healthChart.destroy();
+            }
+
+            console.log('[Agent Dashboard] Cleanup complete');
+        }
+    };
+}
+
+// Export for use in templates
+window.agentDashboard = agentDashboard;
+
+console.log('[Agent Dashboard] Component loaded');

@@ -1,0 +1,798 @@
+/**
+ * Execution Monitor Dashboard
+ * Real-time monitoring of fractal execution nodes
+ *
+ * Features:
+ * - Real-time execution tracking
+ * - WebSocket updates
+ * - Performance charts
+ * - Resource monitoring
+ * - Log streaming
+ * - Quick actions (pause/resume/cancel)
+ */
+
+// Global state
+let performanceChart = null;
+let statusChart = null;
+let wsConnection = null;
+
+/**
+ * Main Alpine.js component for Execution Dashboard
+ */
+function executionDashboard() {
+  return {
+    // State
+    activeExecutions: [],
+    selectedExecution: null,
+    timeline: [],
+    logs: [],
+    logFilter: 'all',
+    isLoading: false,
+    wsConnected: false,
+
+    // Metrics
+    metrics: {
+      activeExecutions: 0,
+      completedToday: 0,
+      successRate: 0,
+      avgDuration: 0,
+      totalExecutions: 0,
+      failedToday: 0
+    },
+
+    // Resources
+    resources: {
+      cpu: 0,
+      memory: 0,
+      network: 0,
+      containers: 0,
+      maxContainers: 50
+    },
+
+    // Chart data
+    performanceData: {
+      labels: [],
+      datasets: [{
+        label: 'Execution Duration (s)',
+        data: [],
+        borderColor: '#00ff88',
+        backgroundColor: 'rgba(0, 255, 136, 0.1)',
+        tension: 0.4,
+        fill: true
+      }]
+    },
+
+    statusData: {
+      labels: ['Running', 'Completed', 'Failed', 'Pending'],
+      datasets: [{
+        data: [0, 0, 0, 0],
+        backgroundColor: [
+          'rgba(13, 202, 240, 0.8)',
+          'rgba(25, 135, 84, 0.8)',
+          'rgba(220, 53, 69, 0.8)',
+          'rgba(108, 117, 125, 0.8)'
+        ],
+        borderColor: [
+          '#0dcaf0',
+          '#198754',
+          '#dc3545',
+          '#6c757d'
+        ],
+        borderWidth: 2
+      }]
+    },
+
+    /**
+     * Initialize dashboard
+     */
+    async init() {
+      console.log('[Execution Dashboard] Initializing component...');
+
+      // Initial data fetch
+      await this.fetchActiveExecutions();
+      await this.fetchMetrics();
+      await this.fetchTimeline();
+      await this.fetchResources();
+
+      // Initialize charts
+      this.initCharts();
+
+      // Connect WebSocket
+      this.connectWebSocket();
+
+      // Start auto-refresh
+      this.startAutoRefresh();
+
+      // Scroll logs to bottom on updates
+      this.$watch('logs', () => {
+        this.$nextTick(() => {
+          const logViewer = document.getElementById('logViewer');
+          if (logViewer) {
+            logViewer.scrollTop = logViewer.scrollHeight;
+          }
+        });
+      });
+
+      console.log('[Execution Dashboard] Initialized successfully');
+    },
+
+    /**
+     * Fetch active executions
+     */
+    async fetchActiveExecutions() {
+      try {
+        const response = await fetch('/api/execution/active');
+        const data = await response.json();
+
+        this.activeExecutions = data.executions || [];
+        this.metrics.activeExecutions = this.activeExecutions.length;
+
+        // Update timeline with new executions
+        this.activeExecutions.forEach(exec => {
+          if (!this.timeline.find(t => t.id === exec.id)) {
+            this.addTimelineEvent(exec.id, exec.type, 'Started execution', exec.status);
+          }
+        });
+
+        this.addLog('info', `Loaded ${this.activeExecutions.length} active executions`);
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error fetching executions:', error);
+        this.addLog('error', `Failed to fetch executions: ${error.message}`);
+      }
+    },
+
+    /**
+     * Fetch metrics
+     */
+    async fetchMetrics() {
+      try {
+        const response = await fetch('/api/metrics/live');
+        const data = await response.json();
+
+        // Update metrics
+        this.metrics.activeExecutions = data.active_exercises || 0;
+        this.metrics.completedToday = Math.floor(Math.random() * 50) + 10; // Mock data
+        this.metrics.successRate = Math.floor(Math.random() * 20) + 80; // Mock: 80-100%
+        this.metrics.avgDuration = Math.floor(Math.random() * 300) + 60; // Mock: 60-360s
+
+        // Update status chart
+        this.updateStatusChart();
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error fetching metrics:', error);
+      }
+    },
+
+    /**
+     * Fetch timeline events
+     */
+    async fetchTimeline() {
+      // In production, this would fetch from API
+      // For now, timeline is built from execution updates
+      if (this.timeline.length === 0) {
+        this.addTimelineEvent(
+          'init',
+          'System',
+          'Execution monitor initialized',
+          'completed'
+        );
+      }
+    },
+
+    /**
+     * Fetch resource utilization
+     */
+    async fetchResources() {
+      try {
+        const response = await fetch('/api/metrics/live');
+        const data = await response.json();
+
+        // Update resources (mock data for now)
+        this.resources.cpu = Math.floor(Math.random() * 40) + 20; // 20-60%
+        this.resources.memory = Math.floor(Math.random() * 50) + 30; // 30-80%
+        this.resources.network = Math.floor(Math.random() * 30) + 10; // 10-40%
+        this.resources.containers = data.running_containers || 0;
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error fetching resources:', error);
+      }
+    },
+
+    /**
+     * Initialize Chart.js charts
+     */
+    initCharts() {
+      // Performance Chart
+      const perfCtx = document.getElementById('performanceChart');
+      if (perfCtx) {
+        performanceChart = new Chart(perfCtx, {
+          type: 'line',
+          data: this.performanceData,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                labels: { color: '#fff' }
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false
+              }
+            },
+            scales: {
+              x: {
+                display: true,
+                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                ticks: { color: '#6c757d' }
+              },
+              y: {
+                display: true,
+                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                ticks: { color: '#6c757d' },
+                beginAtZero: true
+              }
+            },
+            interaction: {
+              mode: 'nearest',
+              axis: 'x',
+              intersect: false
+            }
+          }
+        });
+
+        // Initialize with some data
+        this.generatePerformanceData();
+      }
+
+      // Status Distribution Chart
+      const statusCtx = document.getElementById('statusChart');
+      if (statusCtx) {
+        statusChart = new Chart(statusCtx, {
+          type: 'doughnut',
+          data: this.statusData,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: 'bottom',
+                labels: { color: '#fff', padding: 15 }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.parsed || 0;
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    },
+
+    /**
+     * Generate performance data for chart
+     */
+    generatePerformanceData() {
+      const now = new Date();
+      const labels = [];
+      const data = [];
+
+      // Generate last 10 data points
+      for (let i = 9; i >= 0; i--) {
+        const time = new Date(now.getTime() - i * 60000); // 1 minute intervals
+        labels.push(time.toLocaleTimeString());
+        data.push(Math.floor(Math.random() * 200) + 50); // Random duration 50-250s
+      }
+
+      this.performanceData.labels = labels;
+      this.performanceData.datasets[0].data = data;
+
+      if (performanceChart) {
+        performanceChart.update('none');
+      }
+    },
+
+    /**
+     * Update status chart
+     */
+    updateStatusChart() {
+      if (!statusChart) return;
+
+      const running = this.activeExecutions.filter(e => e.status === 'running').length;
+      const completed = Math.floor(this.metrics.completedToday * (this.metrics.successRate / 100));
+      const failed = this.metrics.completedToday - completed;
+      const pending = this.activeExecutions.filter(e => e.status === 'pending').length;
+
+      this.statusData.datasets[0].data = [running, completed, failed, pending];
+      statusChart.update('none');
+    },
+
+    /**
+     * Connect to WebSocket for real-time updates
+     */
+    connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/tool`;
+
+      try {
+        wsConnection = new WebSocket(wsUrl);
+
+        wsConnection.onopen = () => {
+          console.log('[Execution Dashboard] WebSocket connected');
+          this.wsConnected = true;
+          this.addLog('success', 'WebSocket connected - Real-time updates enabled');
+
+          // Subscribe to execution updates
+          this.subscribeToUpdates();
+        };
+
+        wsConnection.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            this.handleWebSocketMessage(message);
+          } catch (error) {
+            console.error('[Execution Dashboard] WebSocket message error:', error);
+          }
+        };
+
+        wsConnection.onerror = (error) => {
+          console.error('[Execution Dashboard] WebSocket error:', error);
+          this.wsConnected = false;
+          this.addLog('error', 'WebSocket connection error');
+        };
+
+        wsConnection.onclose = () => {
+          console.log('[Execution Dashboard] WebSocket closed, reconnecting...');
+          this.wsConnected = false;
+          this.addLog('warning', 'WebSocket disconnected - Attempting to reconnect...');
+
+          // Reconnect after 3 seconds
+          setTimeout(() => this.connectWebSocket(), 3000);
+        };
+
+      } catch (error) {
+        console.error('[Execution Dashboard] WebSocket connection error:', error);
+        this.wsConnected = false;
+      }
+    },
+
+    /**
+     * Subscribe to execution updates via WebSocket
+     */
+    subscribeToUpdates() {
+      if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+        wsConnection.send(JSON.stringify({
+          action: 'subscribe',
+          topic: 'executions'
+        }));
+      }
+    },
+
+    /**
+     * Handle WebSocket messages
+     */
+    handleWebSocketMessage(message) {
+      console.log('[Execution Dashboard] WebSocket message:', message);
+
+      switch (message.type) {
+        case 'execution_started':
+          this.handleExecutionStarted(message.data);
+          break;
+
+        case 'execution_updated':
+          this.handleExecutionUpdated(message.data);
+          break;
+
+        case 'execution_completed':
+          this.handleExecutionCompleted(message.data);
+          break;
+
+        case 'execution_failed':
+          this.handleExecutionFailed(message.data);
+          break;
+
+        case 'node_update':
+          this.handleNodeUpdate(message.data);
+          break;
+
+        case 'log':
+          this.addLog(message.level || 'info', message.message);
+          break;
+
+        default:
+          console.log('[Execution Dashboard] Unknown message type:', message.type);
+      }
+    },
+
+    /**
+     * Handle execution started event
+     */
+    handleExecutionStarted(data) {
+      const execution = {
+        id: data.id,
+        type: data.type || 'execution',
+        status: 'running',
+        progress: 0,
+        duration: 0,
+        level: data.level || 'N/A',
+        nodeCount: data.nodeCount || 0,
+        startTime: new Date()
+      };
+
+      this.activeExecutions.push(execution);
+      this.addTimelineEvent(execution.id, execution.type, 'Execution started', 'running');
+      this.addLog('info', `Started: ${execution.type} (${execution.id})`);
+      this.metrics.activeExecutions = this.activeExecutions.length;
+
+      // Update charts
+      this.updateStatusChart();
+    },
+
+    /**
+     * Handle execution updated event
+     */
+    handleExecutionUpdated(data) {
+      const index = this.activeExecutions.findIndex(e => e.id === data.id);
+      if (index !== -1) {
+        this.activeExecutions[index] = {
+          ...this.activeExecutions[index],
+          ...data,
+          duration: data.duration || this.calculateDuration(this.activeExecutions[index].startTime)
+        };
+
+        this.addLog('info', `Updated: ${data.type} - ${data.progress}% complete`);
+      }
+    },
+
+    /**
+     * Handle execution completed event
+     */
+    handleExecutionCompleted(data) {
+      const index = this.activeExecutions.findIndex(e => e.id === data.id);
+      if (index !== -1) {
+        const execution = this.activeExecutions[index];
+        this.activeExecutions.splice(index, 1);
+
+        this.addTimelineEvent(data.id, execution.type, 'Execution completed successfully', 'completed');
+        this.addLog('success', `Completed: ${execution.type} (${data.id})`);
+
+        this.metrics.completedToday++;
+        this.metrics.activeExecutions = this.activeExecutions.length;
+
+        // Update charts
+        this.updateStatusChart();
+        this.addPerformanceDataPoint(execution.type, data.duration || execution.duration);
+      }
+    },
+
+    /**
+     * Handle execution failed event
+     */
+    handleExecutionFailed(data) {
+      const index = this.activeExecutions.findIndex(e => e.id === data.id);
+      if (index !== -1) {
+        const execution = this.activeExecutions[index];
+        this.activeExecutions.splice(index, 1);
+
+        this.addTimelineEvent(data.id, execution.type, `Execution failed: ${data.error}`, 'failed');
+        this.addLog('error', `Failed: ${execution.type} - ${data.error}`);
+
+        this.metrics.failedToday++;
+        this.metrics.activeExecutions = this.activeExecutions.length;
+
+        // Update charts
+        this.updateStatusChart();
+      }
+    },
+
+    /**
+     * Handle node update event
+     */
+    handleNodeUpdate(data) {
+      // Update execution if it's in our active list
+      const execution = this.activeExecutions.find(e => e.id === data.execution_id);
+      if (execution) {
+        execution.nodeCount = data.nodeCount || execution.nodeCount;
+        execution.progress = data.progress || execution.progress;
+      }
+    },
+
+    /**
+     * Add performance data point to chart
+     */
+    addPerformanceDataPoint(label, duration) {
+      if (!performanceChart) return;
+
+      const now = new Date();
+      this.performanceData.labels.push(now.toLocaleTimeString());
+      this.performanceData.datasets[0].data.push(duration);
+
+      // Keep only last 20 points
+      if (this.performanceData.labels.length > 20) {
+        this.performanceData.labels.shift();
+        this.performanceData.datasets[0].data.shift();
+      }
+
+      performanceChart.update('active');
+    },
+
+    /**
+     * Add timeline event
+     */
+    addTimelineEvent(id, type, message, status) {
+      const event = {
+        id: `${id}_${Date.now()}`,
+        executionId: id,
+        type: type,
+        message: message,
+        status: status,
+        timestamp: new Date()
+      };
+
+      this.timeline.unshift(event);
+
+      // Keep only last 50 events
+      if (this.timeline.length > 50) {
+        this.timeline = this.timeline.slice(0, 50);
+      }
+    },
+
+    /**
+     * Add log entry
+     */
+    addLog(level, message) {
+      const log = {
+        id: Date.now(),
+        level: level, // info, success, warning, error
+        message: message,
+        timestamp: new Date()
+      };
+
+      this.logs.push(log);
+
+      // Keep only last 200 logs
+      if (this.logs.length > 200) {
+        this.logs = this.logs.slice(-200);
+      }
+    },
+
+    /**
+     * Clear logs
+     */
+    clearLogs() {
+      this.logs = [];
+      this.addLog('info', 'Logs cleared');
+    },
+
+    /**
+     * Computed: Filtered logs
+     */
+    get filteredLogs() {
+      if (this.logFilter === 'all') {
+        return this.logs;
+      }
+      return this.logs.filter(log => log.level === this.logFilter);
+    },
+
+    /**
+     * Select execution for details
+     */
+    selectExecution(execution) {
+      this.selectedExecution = execution;
+      this.addLog('info', `Selected execution: ${execution.id}`);
+
+      // Could show a modal or navigate to visualizer
+      Alpine.store('notifications').info(`Selected: ${execution.type}`);
+    },
+
+    /**
+     * Pause execution
+     */
+    async pauseExecution(executionId) {
+      try {
+        this.addLog('warning', `Pausing execution: ${executionId}`);
+
+        // In production, would call API
+        // await fetch(`/api/execution/${executionId}/pause`, { method: 'POST' });
+
+        const index = this.activeExecutions.findIndex(e => e.id === executionId);
+        if (index !== -1) {
+          this.activeExecutions[index].status = 'paused';
+          this.addTimelineEvent(executionId, this.activeExecutions[index].type, 'Execution paused', 'paused');
+        }
+
+        Alpine.store('notifications').warning(`Paused: ${executionId}`);
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error pausing execution:', error);
+        this.addLog('error', `Failed to pause: ${error.message}`);
+        Alpine.store('notifications').error('Failed to pause execution');
+      }
+    },
+
+    /**
+     * Resume execution
+     */
+    async resumeExecution(executionId) {
+      try {
+        this.addLog('info', `Resuming execution: ${executionId}`);
+
+        // In production, would call API
+        // await fetch(`/api/execution/${executionId}/resume`, { method: 'POST' });
+
+        const index = this.activeExecutions.findIndex(e => e.id === executionId);
+        if (index !== -1) {
+          this.activeExecutions[index].status = 'running';
+          this.addTimelineEvent(executionId, this.activeExecutions[index].type, 'Execution resumed', 'running');
+        }
+
+        Alpine.store('notifications').success(`Resumed: ${executionId}`);
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error resuming execution:', error);
+        this.addLog('error', `Failed to resume: ${error.message}`);
+        Alpine.store('notifications').error('Failed to resume execution');
+      }
+    },
+
+    /**
+     * Cancel execution
+     */
+    async cancelExecution(executionId) {
+      if (!confirm('Are you sure you want to cancel this execution?')) {
+        return;
+      }
+
+      try {
+        this.addLog('warning', `Cancelling execution: ${executionId}`);
+
+        // In production, would call API
+        // await fetch(`/api/execution/${executionId}/cancel`, { method: 'POST' });
+
+        const index = this.activeExecutions.findIndex(e => e.id === executionId);
+        if (index !== -1) {
+          const execution = this.activeExecutions[index];
+          this.activeExecutions.splice(index, 1);
+          this.addTimelineEvent(executionId, execution.type, 'Execution cancelled by user', 'cancelled');
+        }
+
+        this.metrics.activeExecutions = this.activeExecutions.length;
+        this.updateStatusChart();
+
+        Alpine.store('notifications').warning(`Cancelled: ${executionId}`);
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error cancelling execution:', error);
+        this.addLog('error', `Failed to cancel: ${error.message}`);
+        Alpine.store('notifications').error('Failed to cancel execution');
+      }
+    },
+
+    /**
+     * Start auto-refresh
+     */
+    startAutoRefresh() {
+      // Refresh active executions every 5 seconds
+      setInterval(async () => {
+        if (!this.wsConnected) {
+          await this.fetchActiveExecutions();
+        }
+        await this.fetchResources();
+      }, 5000);
+
+      // Update execution durations every second
+      setInterval(() => {
+        this.activeExecutions.forEach(exec => {
+          if (exec.startTime && exec.status === 'running') {
+            exec.duration = this.calculateDuration(exec.startTime);
+            exec.progress = Math.min(99, exec.progress + Math.random() * 2); // Simulate progress
+          }
+        });
+      }, 1000);
+
+      // Update performance chart every 30 seconds
+      setInterval(() => {
+        if (Math.random() > 0.5) { // Randomly add data points
+          const duration = Math.floor(Math.random() * 200) + 50;
+          this.addPerformanceDataPoint('exec', duration);
+        }
+      }, 30000);
+    },
+
+    /**
+     * Calculate duration from start time
+     */
+    calculateDuration(startTime) {
+      if (!startTime) return 0;
+      const now = new Date();
+      const start = new Date(startTime);
+      return Math.floor((now - start) / 1000); // seconds
+    },
+
+    /**
+     * Format duration for display
+     */
+    formatDuration(seconds) {
+      if (!seconds || seconds < 0) return '0s';
+
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+      } else {
+        return `${secs}s`;
+      }
+    },
+
+    /**
+     * Format time for display
+     */
+    formatTime(timestamp) {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString();
+    },
+
+    /**
+     * Manual refresh
+     */
+    async refresh() {
+      this.isLoading = true;
+      this.addLog('info', 'Refreshing dashboard data...');
+
+      try {
+        await Promise.all([
+          this.fetchActiveExecutions(),
+          this.fetchMetrics(),
+          this.fetchResources()
+        ]);
+
+        this.addLog('success', 'Dashboard refreshed successfully');
+        Alpine.store('notifications').success('Dashboard refreshed');
+
+      } catch (error) {
+        console.error('[Execution Dashboard] Error refreshing:', error);
+        this.addLog('error', `Refresh failed: ${error.message}`);
+        Alpine.store('notifications').error('Failed to refresh dashboard');
+
+      } finally {
+        this.isLoading = false;
+      }
+    }
+  };
+}
+
+// Initialize refresh button
+document.addEventListener('DOMContentLoaded', () => {
+  const refreshBtn = document.getElementById('refreshBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      // Trigger refresh via Alpine
+      const dashboardEl = document.querySelector('[x-data]');
+      if (dashboardEl && dashboardEl.__x) {
+        dashboardEl.__x.$data.refresh();
+      }
+    });
+  }
+
+  console.log('[Execution Dashboard] Ready');
+});
+
+// Export for global access
+if (typeof window !== 'undefined') {
+  window.executionDashboard = executionDashboard;
+}

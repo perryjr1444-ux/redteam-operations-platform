@@ -1,0 +1,476 @@
+{% extends "base_enhanced.html" %}
+
+{% block page_header %}
+<h2><i class="bi bi-bug-fill text-danger"></i> Attack Operations</h2>
+<p class="text-muted">Launch and manage Kali Linux attack containers</p>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="card bg-dark border-warning">
+      <div class="card-header bg-warning text-dark">
+        <i class="bi bi-exclamation-triangle-fill"></i> <strong>WARNING:</strong> Red Team Operations
+      </div>
+      <div class="card-body">
+        <p class="mb-0">These operations launch real attack containers. Ensure you have proper authorization and are targeting approved systems only.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Attack Launch Forms -->
+<div class="row mb-4">
+  <!-- Nmap Scan -->
+  <div class="col-md-6 mb-3">
+    <div class="card">
+      <div class="card-header bg-primary">
+        <i class="bi bi-search"></i> Network Scan (Nmap)
+      </div>
+      <div class="card-body">
+        <form id="nmapForm" action="/api/attacks/nmap" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Target</label>
+            <input type="text" class="form-control" name="target" placeholder="192.168.1.1 or example.com" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Scan Type</label>
+            <select class="form-select" name="scan_type">
+              <option value="quick">Quick (-F)</option>
+              <option value="full">Full Port Scan</option>
+              <option value="stealth">Stealth Scan</option>
+              <option value="service">Service Detection</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Exercise (Optional)</label>
+            <select class="form-select" name="exercise_id">
+              <option value="">Standalone</option>
+              {% for exercise in exercises %}
+              <option value="{{ exercise.exercise_id }}">{{ exercise.exercise_id }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-play-fill"></i> Launch Scan
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metasploit -->
+  <div class="col-md-6 mb-3">
+    <div class="card">
+      <div class="card-header bg-danger">
+        <i class="bi bi-terminal-fill"></i> Metasploit Framework
+      </div>
+      <div class="card-body">
+        <form id="msfForm" action="/api/attacks/metasploit" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Target</label>
+            <input type="text" class="form-control" name="target" placeholder="192.168.1.100" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Exercise (Optional)</label>
+            <select class="form-select" name="exercise_id">
+              <option value="">Standalone</option>
+              {% for exercise in exercises %}
+              <option value="{{ exercise.exercise_id }}">{{ exercise.exercise_id }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-danger w-100">
+            <i class="bi bi-play-fill"></i> Launch Metasploit
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- SQLMap -->
+  <div class="col-md-6 mb-3">
+    <div class="card">
+      <div class="card-header bg-warning text-dark">
+        <i class="bi bi-database-fill"></i> SQL Injection (SQLMap)
+      </div>
+      <div class="card-body">
+        <form id="sqlmapForm" action="/api/attacks/sqlmap" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Target URL</label>
+            <input type="text" class="form-control" name="target" placeholder="http://target.com/page.php?id=1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Exercise (Optional)</label>
+            <select class="form-select" name="exercise_id">
+              <option value="">Standalone</option>
+              {% for exercise in exercises %}
+              <option value="{{ exercise.exercise_id }}">{{ exercise.exercise_id }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-warning w-100">
+            <i class="bi bi-play-fill"></i> Launch SQLMap
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Attack -->
+  <div class="col-md-6 mb-3">
+    <div class="card">
+      <div class="card-header bg-secondary">
+        <i class="bi bi-code-slash"></i> Custom Attack
+      </div>
+      <div class="card-body">
+        <form id="customForm" action="/api/attacks/custom" method="POST">
+          <div class="mb-3">
+            <label class="form-label">Target</label>
+            <input type="text" class="form-control" name="target" placeholder="192.168.1.1" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Attack Type</label>
+            <input type="text" class="form-control" name="attack_type" placeholder="custom-exploit" value="custom">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Command</label>
+            <textarea class="form-control font-monospace" name="command" rows="3" placeholder="apt-get update && apt-get install -y nmap && nmap -sV target" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Exercise (Optional)</label>
+            <select class="form-select" name="exercise_id">
+              <option value="">Standalone</option>
+              {% for exercise in exercises %}
+              <option value="{{ exercise.exercise_id }}">{{ exercise.exercise_id }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-secondary w-100">
+            <i class="bi bi-play-fill"></i> Launch Custom Attack
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Active Containers -->
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-boxes"></i> Active Attack Containers
+        <button class="btn btn-sm btn-outline-secondary float-end" onclick="refreshContainers()">
+          <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+      </div>
+      <div class="card-body">
+        <div id="containersList">
+          <table class="table table-dark table-striped">
+            <thead>
+              <tr>
+                <th>Container</th>
+                <th>Attack Type</th>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Exercise</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for container in containers %}
+              <tr>
+                <td><code>{{ container.container_name }}</code></td>
+                <td>
+                  <span class="badge bg-info">{{ container.attack_type }}</span>
+                </td>
+                <td>{{ container.target }}</td>
+                <td>
+                  {% if container.status == 'running' %}
+                  <span class="badge bg-success">Running</span>
+                  {% elif container.status == 'stopped' %}
+                  <span class="badge bg-warning">Stopped</span>
+                  {% else %}
+                  <span class="badge bg-secondary">{{ container.status }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ container.exercise_id or 'Standalone' }}</td>
+                <td>{{ container.created_at.strftime('%Y-%m-%d %H:%M') if container.created_at else 'N/A' }}</td>
+                <td>
+                  <button class="btn btn-sm btn-info" onclick="viewLogs('{{ container.container_id }}')">
+                    <i class="bi bi-file-text"></i>
+                  </button>
+                  <button class="btn btn-sm btn-warning" onclick="stopContainer('{{ container.container_id }}')">
+                    <i class="bi bi-stop-fill"></i>
+                  </button>
+                  <button class="btn btn-sm btn-danger" onclick="deleteContainer('{{ container.container_id }}')">
+                    <i class="bi bi-trash-fill"></i>
+                  </button>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7" class="text-center text-muted">No active containers</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Live Terminal Sidebar -->
+<div id="terminalSidebar" class="terminal-sidebar">
+  <div class="terminal-sidebar-header">
+    <span class="terminal-sidebar-title">
+      <i class="bi bi-terminal-fill"></i> LIVE TERMINAL
+    </span>
+    <button class="btn btn-sm btn-outline-danger" onclick="closeTerminalSidebar()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="terminal-container">
+    <div class="terminal-header">
+      <span class="terminal-title" id="terminalContainerName">Container Terminal</span>
+      <div class="terminal-buttons">
+        <button onclick="clearTerminal()">Clear</button>
+        <button onclick="disconnectTerminal()">Disconnect</button>
+      </div>
+    </div>
+    <div id="terminal"></div>
+  </div>
+</div>
+
+<!-- Overlay for sidebar -->
+<div id="terminalOverlay" class="terminal-overlay" onclick="closeTerminalSidebar()"></div>
+
+<style>
+.terminal-sidebar {
+  position: fixed;
+  right: -600px;
+  top: 0;
+  width: 600px;
+  height: 100vh;
+  background: var(--darker-bg);
+  border-left: 2px solid var(--neon-green);
+  box-shadow: -5px 0 30px rgba(0, 255, 0, 0.3);
+  transition: right 0.3s ease;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-sidebar.active {
+  right: 0;
+}
+
+.terminal-sidebar-header {
+  padding: 1rem;
+  background: var(--card-bg);
+  border-bottom: 2px solid var(--neon-green);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.terminal-sidebar-title {
+  color: var(--neon-green);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px var(--neon-green);
+}
+
+.terminal-sidebar .terminal-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.terminal-sidebar #terminal {
+  flex: 1;
+  height: auto !important;
+}
+
+.terminal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1040;
+  display: none;
+}
+
+.terminal-overlay.active {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .terminal-sidebar {
+    width: 100%;
+    right: -100%;
+  }
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Global terminal instance
+let currentTerminal = null;
+let currentContainerId = null;
+
+// Terminal sidebar management
+function openTerminalSidebar(containerId, containerName) {
+  document.getElementById('terminalSidebar').classList.add('active');
+  document.getElementById('terminalOverlay').classList.add('active');
+  document.getElementById('terminalContainerName').textContent = containerName || containerId;
+
+  // Initialize terminal if not already done
+  if (currentTerminal) {
+    currentTerminal.disconnect();
+  }
+
+  currentContainerId = containerId;
+  currentTerminal = initTerminal(containerId);
+}
+
+function closeTerminalSidebar() {
+  document.getElementById('terminalSidebar').classList.remove('active');
+  document.getElementById('terminalOverlay').classList.remove('active');
+
+  if (currentTerminal) {
+    currentTerminal.disconnect();
+    currentTerminal = null;
+    currentContainerId = null;
+  }
+}
+
+function clearTerminal() {
+  if (currentTerminal) {
+    currentTerminal.clear();
+  }
+}
+
+function disconnectTerminal() {
+  if (currentTerminal) {
+    currentTerminal.disconnect();
+    currentTerminal.term.write('\r\n\x1b[33m[Terminal] Disconnected by user\x1b[0m\r\n');
+  }
+}
+
+// Form submission handlers
+async function submitForm(form, event) {
+  event.preventDefault();
+  const formData = new FormData(form);
+
+  try {
+    const response = await fetch(form.action, {
+      method: 'POST',
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      // Show success notification
+      if (typeof Notyf !== 'undefined') {
+        new Notyf().success('Attack container launched successfully!');
+      } else {
+        alert('Attack container launched successfully!');
+      }
+
+      form.reset();
+
+      // Open terminal for the new container
+      if (result.container_id) {
+        setTimeout(() => {
+          openTerminalSidebar(result.container_id, result.container_name || 'Attack Container');
+        }, 1000);
+      }
+
+      setTimeout(refreshContainers, 2000);
+    } else {
+      if (typeof Notyf !== 'undefined') {
+        new Notyf().error('Failed to launch container: ' + (result.error || 'Unknown error'));
+      } else {
+        alert('Failed to launch container: ' + (result.error || 'Unknown error'));
+      }
+    }
+  } catch (error) {
+    if (typeof Notyf !== 'undefined') {
+      new Notyf().error('Error: ' + error.message);
+    } else {
+      alert('Error: ' + error.message);
+    }
+  }
+}
+
+document.getElementById('nmapForm').addEventListener('submit', function(e) { submitForm(this, e); });
+document.getElementById('msfForm').addEventListener('submit', function(e) { submitForm(this, e); });
+document.getElementById('sqlmapForm').addEventListener('submit', function(e) { submitForm(this, e); });
+document.getElementById('customForm').addEventListener('submit', function(e) { submitForm(this, e); });
+
+// Container management
+async function refreshContainers() {
+  window.location.reload();
+}
+
+async function viewLogs(containerId) {
+  // Open live terminal instead of static logs modal
+  const row = event.target.closest('tr');
+  const containerName = row ? row.querySelector('code').textContent : containerId;
+  openTerminalSidebar(containerId, containerName);
+}
+
+async function stopContainer(containerId) {
+  if (!confirm('Stop this container?')) return;
+
+  try {
+    const response = await fetch(`/api/attacks/containers/${containerId}/stop`, {
+      method: 'POST'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('Container stopped');
+      refreshContainers();
+    } else {
+      alert('Failed to stop container: ' + result.error);
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+
+async function deleteContainer(containerId) {
+  if (!confirm('Delete this container? This action cannot be undone.')) return;
+
+  try {
+    const response = await fetch(`/api/attacks/containers/${containerId}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('Container deleted');
+      refreshContainers();
+    } else {
+      alert('Failed to delete container: ' + result.error);
+    }
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+</script>
+{% endblock %}

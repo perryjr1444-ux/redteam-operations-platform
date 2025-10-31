@@ -1,0 +1,67 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Exercise Templates - Red Team C2{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-military-green">EXERCISE TEMPLATES</h1>
+            <p class="text-tactical-muted font-mono text-sm mt-1">Pre-configured attack scenarios and methodologies</p>
+        </div>
+        <div class="flex items-center gap-2 text-sm font-mono">
+            <span class="text-tactical-muted">Available Templates:</span>
+            <span class="text-military-green font-bold">{{ templates|length }}</span>
+        </div>
+    </div>
+
+    <!-- Templates Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for template in templates %}
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6 hover:border-military-green transition-colors">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-military-green font-mono">{{ template.name }}</h3>
+                    <code class="text-xs text-tactical-muted">{{ template.template_id }}</code>
+                </div>
+                <span class="bg-tactical-border text-tactical-text px-2 py-1 rounded text-xs uppercase">
+                    {{ template.category }}
+                </span>
+            </div>
+
+            <div class="space-y-3">
+                <!-- Risk Level -->
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-tactical-muted">Risk Level:</span>
+                    <span class="px-2 py-1 rounded text-xs font-semibold
+                        {% if template.risk_level == 'low' %}bg-status-online text-tactical-bg
+                        {% elif template.risk_level == 'medium' %}bg-military-amber text-tactical-bg
+                        {% elif template.risk_level == 'high' %}bg-military-red text-white
+                        {% else %}bg-tactical-muted text-tactical-text{% endif %}">
+                        {{ template.risk_level|upper }}
+                    </span>
+                </div>
+
+                <!-- Duration -->
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-tactical-muted">Duration:</span>
+                    <span class="text-sm text-military-green font-mono">{{ template.duration }}</span>
+                </div>
+
+                <!-- Create Button -->
+                <a href="/exercise/create/{{ template.template_id }}"
+                   class="block w-full bg-military-green hover:bg-military-green-dark text-tactical-bg px-4 py-2 rounded text-sm font-semibold text-center transition-colors mt-4">
+                    <i class="bi bi-plus-circle"></i> Create Exercise
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-span-full bg-tactical-surface border border-tactical-border rounded-lg p-12 text-center">
+            <i class="bi bi-file-earmark-text text-6xl text-tactical-muted mb-4"></i>
+            <p class="text-tactical-muted">No templates found.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

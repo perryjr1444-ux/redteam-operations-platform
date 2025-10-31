@@ -1,0 +1,418 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Execution Metrics Dashboard - Red Team C2{% endblock %}
+
+{% block extra_head %}
+<!-- Dashboard CSS -->
+<link href="/static/css/shadcn-dashboards.css" rel="stylesheet">
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js (must load before dashboard-components) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- D3.js for tree viz -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+<!-- Dashboard Components -->
+<script src="/static/js/dashboard-components.js"></script>
+
+<!-- Execution Tree Viz -->
+<script src="/static/js/components/ExecutionTreeViz.js"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="{
+  execution: $store.executionDashboard,
+  refreshControl: window.dashboardComponents.refreshControl('executionDashboard', 3000)
+}" x-init="execution.startAutoRefresh(3000)" class="p-6">
+
+  <!-- Page Header -->
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <h1 class="text-3xl font-bold mb-2">Execution Metrics Dashboard</h1>
+      <p class="text-tactical-muted">5-layer fractal execution tree performance</p>
+    </div>
+
+    <!-- Refresh Controls (same as agents dashboard) -->
+    <div x-data="refreshControl" class="flex gap-4 items-center">
+      <select x-model="currentInterval" @change="setInterval($event.target.value)" class="bg-tactical-card border border-tactical-border rounded px-3 py-2">
+        <template x-for="interval in intervals" :key="interval">
+          <option :value="interval" x-text="(interval / 1000) + 's'"></option>
+        </template>
+      </select>
+
+      <button @click="toggle()" class="px-4 py-2 rounded border" :class="isPaused ? 'border-military-green text-military-green' : 'border-military-amber text-military-amber'">
+        <i :class="isPaused ? 'bi bi-play-fill' : 'bi bi-pause-fill'"></i>
+        <span x-text="isPaused ? 'Resume' : 'Pause'"></span>
+      </button>
+
+      <button @click="manualRefresh()" class="px-4 py-2 rounded border border-military-green text-military-green">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+
+      <span class="text-sm text-tactical-muted">Last: <span x-text="execution.lastUpdate ? new Date(execution.lastUpdate).toLocaleTimeString() : 'Never'"></span></span>
+    </div>
+  </div>
+
+  <!-- Resource Utilization Gauges (4 gauges) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="execution-card" data-execution-level="exercise">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-layers-fill" style="color: #0096ff"></i>
+        <span style="color: #0096ff">Exercises</span>
+      </h3>
+      <div class="relative h-32">
+        <canvas id="exerciseGauge"></canvas>
+      </div>
+      <div class="text-center mt-2">
+        <span class="text-2xl font-mono font-bold" style="color: #0096ff" x-text="execution.data.metrics?.resource_utilization?.exercises?.current || 0"></span>
+        <span class="text-tactical-muted"> / </span>
+        <span class="text-lg font-mono" x-text="execution.data.metrics?.resource_utilization?.exercises?.max || 0"></span>
+      </div>
+    </div>
+
+    <div class="execution-card" data-execution-level="chain">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-link-45deg" style="color: #00d9ff"></i>
+        <span style="color: #00d9ff">Chains</span>
+      </h3>
+      <div class="relative h-32">
+        <canvas id="chainGauge"></canvas>
+      </div>
+      <div class="text-center mt-2">
+        <span class="text-2xl font-mono font-bold" style="color: #00d9ff" x-text="execution.data.metrics?.resource_utilization?.chains?.current || 0"></span>
+        <span class="text-tactical-muted"> / </span>
+        <span class="text-lg font-mono" x-text="execution.data.metrics?.resource_utilization?.chains?.max || 0"></span>
+      </div>
+    </div>
+
+    <div class="execution-card" data-execution-level="tool">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-wrench" style="color: #22d3ee"></i>
+        <span style="color: #22d3ee">Tools</span>
+      </h3>
+      <div class="relative h-32">
+        <canvas id="toolGauge"></canvas>
+      </div>
+      <div class="text-center mt-2">
+        <span class="text-2xl font-mono font-bold" style="color: #22d3ee" x-text="execution.data.metrics?.resource_utilization?.tools?.current || 0"></span>
+        <span class="text-tactical-muted"> / </span>
+        <span class="text-lg font-mono" x-text="execution.data.metrics?.resource_utilization?.tools?.max || 0"></span>
+      </div>
+    </div>
+
+    <div class="execution-card" data-execution-level="container">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-box-seam" style="color: #06b6d4"></i>
+        <span style="color: #06b6d4">Containers</span>
+      </h3>
+      <div class="relative h-32">
+        <canvas id="containerGauge"></canvas>
+      </div>
+      <div class="text-center mt-2">
+        <span class="text-2xl font-mono font-bold" style="color: #06b6d4" x-text="execution.data.metrics?.resource_utilization?.containers?.current || 0"></span>
+        <span class="text-tactical-muted"> / </span>
+        <span class="text-lg font-mono" x-text="execution.data.metrics?.resource_utilization?.containers?.max || 0"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Execution Tree Visualization & Success Rates -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <div class="lg:col-span-2 chart-wrapper" style="min-height: 500px;">
+      <h3 class="text-lg font-bold mb-4">5-Layer Execution Tree</h3>
+      <div id="executionTree" class="w-full h-96"></div>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Success/Failure Pie Chart -->
+      <div class="chart-wrapper">
+        <h3 class="text-lg font-bold mb-4">Overall Success Rate</h3>
+        <canvas id="successRateChart"></canvas>
+        <div class="text-center mt-3">
+          <span class="text-3xl font-mono font-bold text-military-green" x-text="((execution.data.metrics?.success_rates?.overall || 0) * 100).toFixed(1) + '%'"></span>
+        </div>
+      </div>
+
+      <!-- Parallel Efficiency Score -->
+      <div class="execution-card" data-execution-level="meta">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+          <i class="bi bi-speedometer2" style="color: #9d4edd"></i>
+          <span style="color: #9d4edd">Parallel Efficiency</span>
+        </h3>
+        <div class="text-center my-4">
+          <span class="text-4xl font-mono font-bold" style="color: #9d4edd" x-text="((execution.data.metrics?.parallel_efficiency || 0) * 100).toFixed(0)"></span>
+          <span class="text-2xl text-tactical-muted">/100</span>
+        </div>
+        <div class="w-full bg-tactical-bg rounded-full h-3">
+          <div class="bg-gradient-to-r from-execution-meta to-execution-container h-3 rounded-full transition-all" :style="'width: ' + ((execution.data.metrics?.parallel_efficiency || 0) * 100) + '%'"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duration Analysis & Bottlenecks -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="chart-wrapper">
+      <h3 class="text-lg font-bold mb-4">Duration Distribution</h3>
+      <canvas id="durationHistogram"></canvas>
+    </div>
+
+    <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+      <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+        <i class="bi bi-exclamation-triangle text-severity-critical"></i>
+        Detected Bottlenecks
+      </h3>
+      <div class="space-y-3 max-h-96 overflow-y-auto">
+        <template x-if="!execution.data.metrics?.bottlenecks || execution.data.metrics.bottlenecks.length === 0">
+          <div class="text-center py-8 text-tactical-muted">
+            <i class="bi bi-check-circle text-4xl mb-2"></i>
+            <p>No bottlenecks detected</p>
+          </div>
+        </template>
+
+        <template x-for="bottleneck in execution.data.metrics?.bottlenecks || []" :key="bottleneck.tool_name">
+          <div class="bg-tactical-surface border rounded p-3" :class="bottleneck.severity === 'high' ? 'border-severity-critical' : 'border-severity-medium'">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-bold" x-text="bottleneck.tool_name"></span>
+              <span class="px-2 py-1 rounded text-xs" :class="bottleneck.severity === 'high' ? 'bg-severity-critical' : 'bg-severity-medium'" x-text="bottleneck.severity"></span>
+            </div>
+            <div class="text-sm text-tactical-muted">
+              Layer: <span class="capitalize" x-text="bottleneck.layer"></span>
+            </div>
+            <div class="text-sm">
+              Avg Duration: <span class="font-mono font-bold" x-text="bottleneck.avg_duration + 's'"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Execution History Table -->
+  <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+    <h3 class="text-lg font-bold mb-4">Recent Executions</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="border-b border-tactical-border">
+          <tr>
+            <th class="text-left p-2 text-tactical-muted">ID</th>
+            <th class="text-left p-2 text-tactical-muted">Layer</th>
+            <th class="text-left p-2 text-tactical-muted">Status</th>
+            <th class="text-left p-2 text-tactical-muted">Duration</th>
+            <th class="text-left p-2 text-tactical-muted">Steps</th>
+            <th class="text-left p-2 text-tactical-muted">Started</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="!execution.data.executions || execution.data.executions.length === 0">
+            <tr>
+              <td colspan="6" class="text-center py-8 text-tactical-muted">
+                <i class="bi bi-inbox text-4xl mb-2"></i>
+                <p>No recent executions</p>
+              </td>
+            </tr>
+          </template>
+
+          <template x-for="exec in execution.data.executions || []" :key="exec.id">
+            <tr class="border-b border-tactical-border hover:bg-tactical-surface transition-colors">
+              <td class="p-2 font-mono text-xs" x-text="exec.id"></td>
+              <td class="p-2">
+                <span class="px-2 py-1 rounded text-xs"
+                      :style="'background: ' + {'meta': '#9d4edd', 'exercise': '#0096ff', 'chain': '#00d9ff', 'tool': '#22d3ee', 'container': '#06b6d4'}[exec.layer]"
+                      x-text="exec.layer"></span>
+              </td>
+              <td class="p-2">
+                <span class="px-2 py-1 rounded text-xs"
+                      :class="{
+                        'completed': 'bg-military-green',
+                        'running': 'bg-military-amber',
+                        'failed': 'bg-military-red',
+                        'pending': 'bg-tactical-muted'
+                      }[exec.status]"
+                      x-text="exec.status"></span>
+              </td>
+              <td class="p-2 font-mono" x-text="exec.duration ? exec.duration.toFixed(1) + 's' : 'N/A'"></td>
+              <td class="p-2 font-mono" x-text="exec.steps_completed + '/' + exec.total_steps"></td>
+              <td class="p-2 text-tactical-muted text-xs" x-text="exec.started_at ? new Date(exec.started_at).toLocaleTimeString() : 'N/A'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Initialize charts
+document.addEventListener('alpine:init', () => {
+  // Wait for DOM to be ready
+  setTimeout(() => {
+    // Create 4 gauge charts
+    const gaugeConfig = (color, value, max) => ({
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [value, max - value],
+          backgroundColor: [color, 'rgba(255, 255, 255, 0.1)'],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        cutout: '75%',
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        rotation: -90,
+        circumference: 180,
+        maintainAspectRatio: false,
+        responsive: true
+      }
+    });
+
+    // Initialize gauges with default values
+    const exerciseGauge = new Chart(document.getElementById('exerciseGauge'), gaugeConfig('#0096ff', 5, 10));
+    const chainGauge = new Chart(document.getElementById('chainGauge'), gaugeConfig('#00d9ff', 10, 20));
+    const toolGauge = new Chart(document.getElementById('toolGauge'), gaugeConfig('#22d3ee', 20, 50));
+    const containerGauge = new Chart(document.getElementById('containerGauge'), gaugeConfig('#06b6d4', 50, 100));
+
+    // Update gauges when data changes
+    Alpine.effect(() => {
+      const store = Alpine.store('executionDashboard');
+      const metrics = store.data.metrics?.resource_utilization;
+
+      if (metrics) {
+        if (metrics.exercises) {
+          exerciseGauge.data.datasets[0].data = [metrics.exercises.current, metrics.exercises.max - metrics.exercises.current];
+          exerciseGauge.update();
+        }
+        if (metrics.chains) {
+          chainGauge.data.datasets[0].data = [metrics.chains.current, metrics.chains.max - metrics.chains.current];
+          chainGauge.update();
+        }
+        if (metrics.tools) {
+          toolGauge.data.datasets[0].data = [metrics.tools.current, metrics.tools.max - metrics.tools.current];
+          toolGauge.update();
+        }
+        if (metrics.containers) {
+          containerGauge.data.datasets[0].data = [metrics.containers.current, metrics.containers.max - metrics.containers.current];
+          containerGauge.update();
+        }
+      }
+    });
+
+    // Success Rate Pie
+    const successRateChart = new Chart(document.getElementById('successRateChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Success', 'Failed'],
+        datasets: [{
+          data: [85, 15],
+          backgroundColor: ['#198754', '#dc3545']
+        }]
+      },
+      options: {
+        cutout: '60%',
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: { color: '#a1a1aa' }
+          }
+        }
+      }
+    });
+
+    // Update success rate chart
+    Alpine.effect(() => {
+      const store = Alpine.store('executionDashboard');
+      const successRate = store.data.metrics?.success_rates?.overall || 0;
+      const successPercent = successRate * 100;
+      const failPercent = 100 - successPercent;
+
+      successRateChart.data.datasets[0].data = [successPercent, failPercent];
+      successRateChart.update();
+    });
+
+    // Duration Histogram
+    const durationHistogram = new Chart(document.getElementById('durationHistogram'), {
+      type: 'bar',
+      data: {
+        labels: ['0-10s', '10-20s', '20-30s', '30-40s', '40-50s', '50+s'],
+        datasets: [{
+          label: 'Executions',
+          data: [10, 15, 25, 30, 12, 8],
+          backgroundColor: '#00d9ff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: true }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+            ticks: { color: '#a1a1aa' }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#a1a1aa' }
+          }
+        }
+      }
+    });
+
+    // Update histogram when data changes
+    Alpine.effect(() => {
+      const store = Alpine.store('executionDashboard');
+      const durationDist = store.data.metrics?.duration_distribution;
+
+      if (durationDist) {
+        durationHistogram.data.datasets[0].data = [
+          durationDist['0-10'] || 0,
+          durationDist['10-20'] || 0,
+          durationDist['20-30'] || 0,
+          durationDist['30-40'] || 0,
+          durationDist['40-50'] || 0,
+          durationDist['50+'] || 0
+        ];
+        durationHistogram.update();
+      }
+    });
+
+    // Initialize D3 execution tree (Wave 4 component)
+    if (window.ExecutionTreeViz) {
+      const treeViz = new ExecutionTreeViz('executionTree', {
+        width: 800,
+        height: 400
+      });
+      // Load data from store
+      Alpine.effect(() => {
+        const tree = Alpine.store('executionDashboard').data.tree;
+        if (tree) {
+          treeViz.loadData(tree);
+        }
+      });
+    } else {
+      // Placeholder for tree visualization until Wave 4 component is created
+      const treeContainer = document.getElementById('executionTree');
+      if (treeContainer) {
+        treeContainer.innerHTML = `
+          <div class="flex items-center justify-center h-full text-tactical-muted">
+            <div class="text-center">
+              <i class="bi bi-diagram-3 text-6xl mb-4 opacity-30"></i>
+              <p class="text-lg">Execution Tree Visualization</p>
+              <p class="text-sm">Will be loaded via ExecutionTreeViz.js (Wave 4)</p>
+            </div>
+          </div>
+        `;
+      }
+    }
+  }, 100);
+});
+</script>
+{% endblock %}

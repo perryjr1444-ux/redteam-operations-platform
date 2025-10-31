@@ -1,0 +1,51 @@
+{% extends "base_enhanced.html" %}
+
+{% block content %}
+<main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+  <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3">
+    <h1 class="h2">
+      <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+      Error {{ status_code }}
+    </h1>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card bg-dark border-danger">
+        <div class="card-body text-center py-5">
+          <i class="bi bi-x-circle-fill text-danger" style="font-size: 5rem;"></i>
+          <h2 class="mt-4 mb-3">{{ error_title }}</h2>
+          <p class="lead mb-4">{{ detail }}</p>
+
+          {% if status_code == 404 %}
+          <p class="text-muted">The page you're looking for doesn't exist or has been moved.</p>
+          {% elif status_code == 500 %}
+          <p class="text-muted">Something went wrong on our end. Our team has been notified.</p>
+          {% elif status_code == 403 %}
+          <p class="text-muted">You don't have permission to access this resource.</p>
+          {% elif status_code == 401 %}
+          <p class="text-muted">You must be authenticated to access this resource.</p>
+          {% else %}
+          <p class="text-muted">An unexpected error occurred.</p>
+          {% endif %}
+
+          <div class="mt-4">
+            <a href="/" class="btn btn-primary me-2">
+              <i class="bi bi-house-door"></i> Go to Dashboard
+            </a>
+            <button onclick="history.back()" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left"></i> Go Back
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {% if request_id %}
+      <div class="text-center mt-3">
+        <small class="text-muted">Request ID: {{ request_id }}</small>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

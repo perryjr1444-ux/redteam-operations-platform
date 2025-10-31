@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Red Team Command Center{% endblock %}</title>
+
+    <!-- Fonts (dynamic based on theme) -->
+    {% if theme and theme.fonts %}
+    <link href="{{ theme.fonts }}" rel="stylesheet">
+    {% else %}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    {% endif %}
+
+    <!-- Bootstrap & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- Theme CSS (dynamic) -->
+    {% if theme and theme.css_files %}
+      {% for css_file in theme.css_files %}
+    <link href="{{ css_file }}" rel="stylesheet">
+      {% endfor %}
+    {% else %}
+    <!-- Fallback to shadcn theme -->
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <link href="/static/css/shadcn-theme.css" rel="stylesheet">
+    {% endif %}
+
+    <!-- Additional Libraries -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+
+    {% block extra_css %}{% endblock %}
+    {% block extra_head %}{% endblock %}
+
+    <style>
+      .sidebar-sticky {
+        position: relative;
+        top: 0;
+        height: calc(100vh - 48px);
+        padding-top: .5rem;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      /* Alpine.js transitions */
+      [x-cloak] { display: none !important; }
+
+      .fade-in-enter {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      .fade-in-enter-active {
+        transition: all 0.3s ease-out;
+      }
+      .fade-in-enter-to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* Notification styles */
+      .notification-container {
+        position: fixed;
+        top: 70px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 400px;
+      }
+
+      .notification {
+        margin-bottom: 10px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 255, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: slideIn 0.3s ease-out;
+      }
+
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      .notification-success {
+        background: rgba(0, 255, 136, 0.1);
+        border-left: 4px solid #00ff88;
+        color: #00ff88;
+      }
+
+      .notification-error {
+        background: rgba(255, 0, 64, 0.1);
+        border-left: 4px solid #ff0040;
+        color: #ff0040;
+      }
+
+      .notification-warning {
+        background: rgba(255, 255, 0, 0.1);
+        border-left: 4px solid #ffff00;
+        color: #ffff00;
+      }
+
+      .notification-info {
+        background: rgba(0, 255, 255, 0.1);
+        border-left: 4px solid #00ffff;
+        color: #00ffff;
+      }
+
+      /* Loading spinner */
+      .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(0, 255, 0, 0.3);
+        border-radius: 50%;
+        border-top-color: #00ff00;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* Enhanced metric cards */
+      .metric-card-enhanced {
+        background: linear-gradient(135deg, rgba(0, 255, 0, 0.05) 0%, rgba(0, 255, 255, 0.05) 100%);
+        border: 1px solid rgba(0, 255, 0, 0.2);
+        border-radius: 12px;
+        padding: 24px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .metric-card-enhanced:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 24px rgba(0, 255, 0, 0.3);
+        border-color: rgba(0, 255, 0, 0.5);
+      }
+
+      .metric-card-enhanced::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
+        transition: left 0.5s;
+      }
+
+      .metric-card-enhanced:hover::before {
+        left: 100%;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Notification Container -->
+    <div x-data class="notification-container" x-cloak>
+      <template x-for="notification in $store.notifications.items" :key="notification.id">
+        <div
+          x-show="notification.visible"
+          x-transition:enter="fade-in-enter"
+          x-transition:enter-start="fade-in-enter"
+          x-transition:enter-end="fade-in-enter-to"
+          :class="`notification notification-${notification.type}`"
+          @click="$store.notifications.remove(notification.id)"
+          style="cursor: pointer;"
+        >
+          <i :class="notification.type === 'success' ? 'bi-check-circle-fill' :
+                     notification.type === 'error' ? 'bi-exclamation-triangle-fill' :
+                     notification.type === 'warning' ? 'bi-exclamation-circle-fill' :
+                     'bi-info-circle-fill'"></i>
+          <div>
+            <strong x-text="notification.message"></strong>
+            <small class="d-block opacity-75" x-text="new Date(notification.timestamp).toLocaleTimeString()"></small>
+          </div>
+          <button type="button" class="btn-close btn-close-white ms-auto" @click="$store.notifications.remove(notification.id)"></button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Header -->
+    <header class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+      <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3 fs-6" href="/" style="font-family: 'Orbitron', sans-serif; font-weight: 700; color: #e91e63;">
+        RED<span style="color: #fff;">TEAM</span> C2
+      </a>
+
+      <!-- Real-time metrics in header -->
+      <div class="d-flex align-items-center gap-3" x-data>
+        <small class="text-success">
+          <i class="bi bi-shield-check"></i>
+          <span x-text="$store.metrics.activeExercises"></span> Active
+        </small>
+        <small class="text-info">
+          <i class="bi bi-cpu"></i>
+          <span x-text="$store.metrics.systemHealth"></span>% Health
+        </small>
+        <small class="text-warning">
+          <i class="bi bi-robot"></i>
+          <span x-text="$store.agents.healthy + '/' + ($store.agents.healthy + $store.agents.unhealthy)"></span> Agents
+        </small>
+
+        <!-- Theme Switcher -->
+        <div class="ms-3 ps-3" style="border-left: 1px solid rgba(255,255,255,0.1);">
+          <select id="theme-selector" class="form-select form-select-sm" style="width: auto;">
+            <option value="">Loading themes...</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <div class="container-fluid">
+      <div class="row">
+        <!-- Sidebar -->
+        <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
+          <div class="sidebar-sticky pt-3">
+            <ul class="nav flex-column">
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'dashboard' %}active{% endif %}" href="/">
+                  <i class="bi bi-house-door"></i>
+                  Dashboard
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'ai_dashboard' %}active{% endif %}" href="/ai/dashboard">
+                  <i class="bi bi-robot"></i>
+                  AI Agents
+                  <span class="badge bg-success ms-2" x-data x-text="$store.agents.healthy"></span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'execution' %}active{% endif %}" href="/execution/monitor">
+                  <i class="bi bi-diagram-3"></i>
+                  Execution Monitor
+                  <span class="badge bg-primary ms-2" x-data x-text="$store.execution.activeExecutions.length"></span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'visualizer' %}active{% endif %}" href="/execution/visualizer">
+                  <i class="bi bi-diagram-3-fill"></i>
+                  Visualizer
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'health' %}active{% endif %}" href="/health">
+                  <i class="bi bi-heart-pulse"></i>
+                  Health
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'exercises' %}active{% endif %}" href="/exercises">
+                  <i class="bi bi-shield-check"></i>
+                  Exercises
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'templates' %}active{% endif %}" href="/templates">
+                  <i class="bi bi-file-earmark-text"></i>
+                  Templates
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'chain_builder' %}active{% endif %}" href="/chains/builder">
+                  <i class="bi bi-link-45deg"></i>
+                  Chain Builder
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'metrics' %}active{% endif %}" href="/metrics">
+                  <i class="bi bi-graph-up"></i>
+                  Metrics
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {% if page == 'attacks' %}active{% endif %}" href="/attacks">
+                  <i class="bi bi-bug-fill text-danger"></i>
+                  Attacks
+                </a>
+              </li>
+            </ul>
+
+            <!-- System Status Mini Widget -->
+            <div class="mt-4 px-3" x-data>
+              <div class="card bg-dark border-success">
+                <div class="card-body p-2">
+                  <small class="text-success d-block">
+                    <i class="bi bi-clock"></i>
+                    Uptime: <span x-text="$store.metrics.uptime"></span>
+                  </small>
+                  <small class="text-info d-block">
+                    <i class="bi bi-box"></i>
+                    Containers: <span x-text="$store.metrics.runningContainers"></span>
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+          <div class="pt-3 pb-2 mb-3 border-bottom">
+            {% block page_header %}{% endblock %}
+          </div>
+          {% block content %}{% endblock %}
+        </main>
+      </div>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+
+    <!-- Terminal -->
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+    <!-- Notifications -->
+    <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+
+    <!-- Custom Scripts -->
+    <script src="/static/js/terminal.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/charts-enhanced.js"></script>
+    <script src="/static/js/alpine-components.js"></script>
+    <script src="/static/js/init-enhanced.js"></script>
+    <script src="/static/js/theme-switcher.js"></script>
+
+    {% block scripts %}{% endblock %}
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

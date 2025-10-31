@@ -1,0 +1,410 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Exercise Tracker - Red Team C2{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-military-green">EXERCISE TRACKER</h1>
+            <p class="text-tactical-muted font-mono text-sm mt-1">Manage and monitor red team exercises</p>
+        </div>
+        <button class="bg-military-green hover:bg-military-green-dark text-tactical-bg px-4 py-2 rounded text-sm font-semibold transition-colors" onclick="showCreateExerciseModal()">
+            <i class="bi bi-plus-circle"></i> New Exercise
+        </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6 text-center">
+            <i class="bi bi-shield-fill-check text-4xl text-military-green"></i>
+            <h5 class="text-tactical-muted text-sm mt-3 uppercase font-semibold">Total Exercises</h5>
+            <p class="text-3xl font-bold text-military-green mt-2">{{ exercises|length }}</p>
+        </div>
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6 text-center">
+            <i class="bi bi-hourglass-split text-4xl text-status-active"></i>
+            <h5 class="text-tactical-muted text-sm mt-3 uppercase font-semibold">Active</h5>
+            <p class="text-3xl font-bold text-status-active mt-2">{{ exercises|selectattr('state', 'equalto', 'active')|list|length }}</p>
+        </div>
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6 text-center">
+            <i class="bi bi-check-circle text-4xl text-status-online"></i>
+            <h5 class="text-tactical-muted text-sm mt-3 uppercase font-semibold">Completed</h5>
+            <p class="text-3xl font-bold text-status-online mt-2">{{ exercises|selectattr('state', 'equalto', 'completed')|list|length }}</p>
+        </div>
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6 text-center">
+            <i class="bi bi-trophy text-4xl text-military-amber"></i>
+            <h5 class="text-tactical-muted text-sm mt-3 uppercase font-semibold">Success Rate</h5>
+            <p class="text-3xl font-bold text-military-amber mt-2">{{ "%.0f"|format(success_rate) }}%</p>
+        </div>
+    </div>
+
+    <!-- State Filter -->
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg p-4">
+        <div class="flex gap-2">
+            <button class="filter-btn px-4 py-2 rounded font-mono text-sm transition-colors bg-military-green text-tactical-bg" data-filter="all">All</button>
+            <button class="filter-btn px-4 py-2 rounded font-mono text-sm transition-colors bg-tactical-border text-tactical-text hover:bg-tactical-muted" data-filter="draft">Draft</button>
+            <button class="filter-btn px-4 py-2 rounded font-mono text-sm transition-colors bg-tactical-border text-tactical-text hover:bg-tactical-muted" data-filter="active">Active</button>
+            <button class="filter-btn px-4 py-2 rounded font-mono text-sm transition-colors bg-tactical-border text-tactical-text hover:bg-tactical-muted" data-filter="completed">Completed</button>
+        </div>
+    </div>
+
+    <!-- Exercises Table -->
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg overflow-hidden">
+        <table class="w-full" id="exercisesTable">
+            <thead class="bg-tactical-card border-b border-tactical-border">
+                <tr class="text-left font-mono text-xs uppercase">
+                    <th class="px-6 py-3 text-military-amber"><i class="bi bi-hash"></i> Exercise ID</th>
+                    <th class="px-6 py-3 text-military-amber"><i class="bi bi-file-earmark-text"></i> Template</th>
+                    <th class="px-6 py-3 text-military-amber"><i class="bi bi-info-circle"></i> State</th>
+                    <th class="px-6 py-3 text-military-amber"><i class="bi bi-bar-chart"></i> Progress</th>
+                    <th class="px-6 py-3 text-military-amber"><i class="bi bi-calendar"></i> Start Date</th>
+                    <th class="px-6 py-3 text-military-amber"><i class="bi bi-person"></i> Owner</th>
+                    <th class="px-6 py-3 text-military-amber text-center"><i class="bi bi-three-dots"></i> Actions</th>
+                </tr>
+            </thead>
+            <tbody class="font-mono text-sm">
+                {% for ex in exercises %}
+                <tr class="border-b border-tactical-border hover:bg-tactical-card transition-colors" data-exercise-id="{{ ex.exercise_id }}" data-state="{{ ex.state }}">
+                    <td class="px-6 py-4"><code class="text-military-green">{{ ex.exercise_id }}</code></td>
+                    <td class="px-6 py-4"><span class="bg-tactical-border text-tactical-text px-2 py-1 rounded text-xs">{{ ex.template }}</span></td>
+                    <td class="px-6 py-4">
+                        {% if ex.state == 'draft' %}
+                        <span class="bg-status-active text-tactical-bg px-2 py-1 rounded text-xs">Draft</span>
+                        {% elif ex.state == 'active' %}
+                        <span class="bg-military-green text-tactical-bg px-2 py-1 rounded text-xs">Active</span>
+                        {% elif ex.state == 'completed' %}
+                        <span class="bg-status-online text-tactical-bg px-2 py-1 rounded text-xs">Completed</span>
+                        {% elif ex.state == 'aborted' %}
+                        <span class="bg-military-red text-white px-2 py-1 rounded text-xs">Aborted</span>
+                        {% else %}
+                        <span class="bg-tactical-muted text-tactical-text px-2 py-1 rounded text-xs">{{ ex.state }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="w-48">
+                            <div class="bg-tactical-border rounded-full h-5 overflow-hidden">
+                                <div class="h-full flex items-center justify-center text-xs {% if ex.progress == 100 %}bg-status-online{% elif ex.progress >= 50 %}bg-military-green{% else %}bg-status-active{% endif %}" style="width: {{ ex.progress }}%">
+                                    <span class="text-tactical-bg font-bold">{{ ex.progress }}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-tactical-muted">{{ ex.start_date }}</td>
+                    <td class="px-6 py-4">
+                        <span class="bg-status-active text-tactical-bg px-2 py-1 rounded text-xs">
+                            <i class="bi bi-person-circle"></i> {{ ex.owner }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex gap-2 justify-center">
+                            <button class="bg-tactical-border hover:bg-military-green text-tactical-text hover:text-tactical-bg px-2 py-1 rounded text-xs transition-colors" onclick="viewExerciseDetails('{{ ex.exercise_id }}')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            {% if ex.state == 'draft' %}
+                            <button class="bg-status-online hover:bg-military-green text-tactical-bg px-2 py-1 rounded text-xs transition-colors" onclick="changeExerciseState('{{ ex.exercise_id }}', 'active')">
+                                <i class="bi bi-play-fill"></i>
+                            </button>
+                            {% elif ex.state == 'active' %}
+                            <button class="bg-status-online hover:bg-military-green text-tactical-bg px-2 py-1 rounded text-xs transition-colors" onclick="changeExerciseState('{{ ex.exercise_id }}', 'completed')">
+                                <i class="bi bi-check-circle"></i>
+                            </button>
+                            <button class="bg-military-red hover:bg-military-red-dark text-white px-2 py-1 rounded text-xs transition-colors" onclick="changeExerciseState('{{ ex.exercise_id }}', 'aborted')">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                            {% endif %}
+                            <button class="bg-military-amber hover:bg-military-amber-dark text-tactical-bg px-2 py-1 rounded text-xs transition-colors" onclick="downloadReport('{{ ex.exercise_id }}')">
+                                <i class="bi bi-download"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="px-6 py-12 text-center text-tactical-muted">No exercises found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Exercise Detail Modal -->
+<div id="exerciseDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
+        <div class="flex items-center justify-between p-6 border-b border-tactical-border">
+            <h5 class="text-xl font-display font-bold text-military-green">EXERCISE DETAILS</h5>
+            <button class="text-tactical-muted hover:text-military-red" onclick="closeModal('exerciseDetailModal')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div id="exerciseDetailContent" class="p-6">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-military-green border-t-transparent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Exercise Modal -->
+<div id="createExerciseModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg max-w-md w-full mx-4">
+        <div class="flex items-center justify-between p-6 border-b border-tactical-border">
+            <h5 class="text-xl font-display font-bold text-military-green">CREATE NEW EXERCISE</h5>
+            <button class="text-tactical-muted hover:text-military-red" onclick="closeModal('createExerciseModal')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="createExerciseForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-tactical-muted mb-2">Exercise ID</label>
+                    <input type="text" name="exercise_id" placeholder="ex-20251019-001" required class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green">
+                    <small class="text-tactical-muted text-xs">Format: ex-YYYYMMDD-NNN</small>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-tactical-muted mb-2">Template</label>
+                    <select name="template" required class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green">
+                        <option value="">Select a template</option>
+                        {% for template in templates %}
+                        <option value="{{ template.template_id }}">{{ template.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-tactical-muted mb-2">Owner</label>
+                    <input type="text" name="owner" value="c0nfig" required class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-tactical-muted mb-2">Start Date</label>
+                    <input type="date" name="start_date" value="{{ today }}" required class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-tactical-muted mb-2">Initial State</label>
+                    <select name="state" class="w-full bg-tactical-card border border-tactical-border rounded px-3 py-2 text-tactical-text font-mono text-sm focus:outline-none focus:border-military-green">
+                        <option value="draft" selected>Draft</option>
+                        <option value="active">Active</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+        <div class="flex gap-2 justify-end p-6 border-t border-tactical-border">
+            <button class="bg-tactical-border hover:bg-tactical-muted text-tactical-text px-4 py-2 rounded text-sm font-semibold transition-colors" onclick="closeModal('createExerciseModal')">Cancel</button>
+            <button class="bg-military-green hover:bg-military-green-dark text-tactical-bg px-4 py-2 rounded text-sm font-semibold transition-colors" onclick="createExercise()">Create Exercise</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg max-w-md w-full mx-4">
+        <div class="flex items-center justify-between p-6 border-b border-tactical-border">
+            <h5 class="text-xl font-display font-bold text-military-amber">CONFIRMATION</h5>
+            <button class="text-tactical-muted hover:text-military-red" onclick="closeModal('confirmationModal')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <p id="confirmationMessage" class="text-tactical-text"></p>
+        </div>
+        <div class="flex gap-2 justify-end p-6 border-t border-tactical-border">
+            <button class="bg-tactical-border hover:bg-tactical-muted text-tactical-text px-4 py-2 rounded text-sm font-semibold transition-colors" onclick="closeModal('confirmationModal')">Cancel</button>
+            <button id="confirmButton" class="bg-military-green hover:bg-military-green-dark text-tactical-bg px-4 py-2 rounded text-sm font-semibold transition-colors">Confirm</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/notyf@3/notyf.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/notyf@3/notyf.min.css">
+<script>
+const notyf = new Notyf();
+
+// Modal helpers
+function showModal(id) {
+    document.getElementById(id).classList.remove('hidden');
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
+}
+
+// State filtering
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        // Update button states
+        document.querySelectorAll('.filter-btn').forEach(b => {
+            b.classList.remove('bg-military-green', 'text-tactical-bg');
+            b.classList.add('bg-tactical-border', 'text-tactical-text');
+        });
+        this.classList.remove('bg-tactical-border', 'text-tactical-text');
+        this.classList.add('bg-military-green', 'text-tactical-bg');
+
+        const filterState = this.dataset.filter;
+        const rows = document.querySelectorAll('#exercisesTable tbody tr[data-exercise-id]');
+
+        rows.forEach(row => {
+            if (filterState === 'all' || row.dataset.state === filterState) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+});
+
+function showCreateExerciseModal() {
+    showModal('createExerciseModal');
+}
+
+async function createExercise() {
+    const form = document.getElementById('createExerciseForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+
+    try {
+        const response = await fetch('/api/exercises', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            notyf.success('Exercise created successfully!');
+            closeModal('createExerciseModal');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            notyf.error('Failed to create exercise: ' + (result.detail || result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        notyf.error('Error creating exercise: ' + error.message);
+    }
+}
+
+async function viewExerciseDetails(exerciseId) {
+    showModal('exerciseDetailModal');
+
+    try {
+        const response = await fetch(`/api/exercises/${exerciseId}/details`);
+        const result = await response.json();
+
+        if (response.ok) {
+            const exercise = result.exercise;
+            const containers = result.containers || [];
+
+            let html = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h6 class="text-sm font-semibold text-military-amber mb-4 uppercase">Exercise Information</h6>
+                        <table class="w-full text-sm font-mono">
+                            <tr class="border-b border-tactical-border"><th class="text-left py-2 text-tactical-muted">Exercise ID</th><td class="text-right py-2"><code class="text-military-green">${exercise.exercise_id}</code></td></tr>
+                            <tr class="border-b border-tactical-border"><th class="text-left py-2 text-tactical-muted">Template</th><td class="text-right py-2"><span class="bg-tactical-border text-tactical-text px-2 py-1 rounded text-xs">${exercise.template}</span></td></tr>
+                            <tr class="border-b border-tactical-border"><th class="text-left py-2 text-tactical-muted">State</th><td class="text-right py-2"><span class="bg-${exercise.state === 'completed' ? 'status-online' : exercise.state === 'active' ? 'military-green' : 'status-active'} text-tactical-bg px-2 py-1 rounded text-xs">${exercise.state}</span></td></tr>
+                            <tr class="border-b border-tactical-border"><th class="text-left py-2 text-tactical-muted">Progress</th><td class="text-right py-2">${exercise.progress}%</td></tr>
+                            <tr class="border-b border-tactical-border"><th class="text-left py-2 text-tactical-muted">Start Date</th><td class="text-right py-2 text-tactical-text">${exercise.start_date}</td></tr>
+                            <tr><th class="text-left py-2 text-tactical-muted">Owner</th><td class="text-right py-2"><span class="bg-status-active text-tactical-bg px-2 py-1 rounded text-xs">${exercise.owner}</span></td></tr>
+                        </table>
+                    </div>
+                    <div>
+                        <h6 class="text-sm font-semibold text-military-amber mb-4 uppercase">Attack Operations (${containers.length})</h6>
+                        ${containers.length > 0 ? `
+                            <div class="space-y-2">
+                                ${containers.map(c => `
+                                    <div class="bg-tactical-card border border-tactical-border rounded p-3">
+                                        <div class="flex justify-between items-center mb-2">
+                                            <div>
+                                                <span class="bg-status-active text-tactical-bg px-2 py-1 rounded text-xs">${c.attack_type}</span>
+                                                <code class="text-military-green text-xs ml-2">${c.target}</code>
+                                            </div>
+                                            <span class="bg-${c.status === 'running' ? 'status-online' : 'military-amber'} text-tactical-bg px-2 py-1 rounded text-xs">${c.status}</span>
+                                        </div>
+                                        <small class="text-tactical-muted text-xs font-mono">${c.container_name}</small><br>
+                                        <small class="text-tactical-muted text-xs">Created: ${new Date(c.created_at).toLocaleString()}</small>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<p class="text-tactical-muted text-sm">No attack operations linked to this exercise yet.</p>'}
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('exerciseDetailContent').innerHTML = html;
+        } else {
+            document.getElementById('exerciseDetailContent').innerHTML =
+                '<div class="bg-military-red-dark border border-military-red text-white rounded p-4">Failed to load exercise details</div>';
+        }
+    } catch (error) {
+        document.getElementById('exerciseDetailContent').innerHTML =
+            '<div class="bg-military-red-dark border border-military-red text-white rounded p-4">Error: ' + error.message + '</div>';
+    }
+}
+
+function changeExerciseState(exerciseId, newState) {
+    const confirmMsg = newState === 'completed' ? 'Mark this exercise as completed?' :
+                       newState === 'aborted' ? 'Abort this exercise? This cannot be undone.' :
+                       'Activate this exercise?';
+
+    showConfirmationModal(confirmMsg, async () => {
+        try {
+            const response = await fetch(`/api/exercises/${exerciseId}/state`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: newState })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                notyf.success('Exercise state updated successfully!');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                notyf.error('Failed to update state: ' + (result.detail || result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            notyf.error('Error updating state: ' + error.message);
+        }
+    });
+}
+
+function showConfirmationModal(message, callback) {
+    showModal('confirmationModal');
+    document.getElementById('confirmationMessage').textContent = message;
+    const confirmButton = document.getElementById('confirmButton');
+
+    const newConfirmButton = confirmButton.cloneNode(true);
+    confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
+
+    newConfirmButton.addEventListener('click', () => {
+        callback();
+        closeModal('confirmationModal');
+    });
+}
+
+async function downloadReport(exerciseId) {
+    try {
+        const response = await fetch(`/api/exercises/${exerciseId}/report`);
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `exercise-${exerciseId}-report.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            notyf.success('Report downloaded successfully!');
+        } else {
+            const result = await response.json();
+            notyf.error('Failed to generate report: ' + (result.detail || result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        notyf.error('Error downloading report: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

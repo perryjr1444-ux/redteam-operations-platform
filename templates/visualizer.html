@@ -1,0 +1,467 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Fractal Execution Visualizer - Red Team C2{% endblock %}
+
+{% block extra_head %}
+<!-- D3.js for visualization -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+<!-- Fractal Visualizer -->
+<script src="/static/js/fractal-visualizer.js"></script>
+
+<!-- Visualizer Styles -->
+<link rel="stylesheet" href="/static/css/visualizer.css">
+{% endblock %}
+
+{% block page_header %}
+<div class="d-flex justify-content-between align-items-center">
+  <h1 class="h2">
+    <i class="bi bi-diagram-3"></i> Fractal Execution Visualizer
+  </h1>
+  <div class="btn-group">
+    <button class="btn btn-outline-success btn-sm" id="centerBtn">
+      <i class="bi bi-bullseye"></i> Center
+    </button>
+    <button class="btn btn-outline-info btn-sm" id="refreshBtn">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+    <button class="btn btn-outline-warning btn-sm" id="statsBtn">
+      <i class="bi bi-graph-up"></i> Stats
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Execution Selector -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card bg-dark border-success">
+      <div class="card-body">
+        <div class="row g-3 align-items-center">
+          <div class="col-md-6">
+            <label class="form-label text-light">Select Execution</label>
+            <select class="form-select bg-dark text-light border-success" id="executionSelect">
+              <option value="">-- Select an execution to visualize --</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-light">Status Filter</label>
+            <select class="form-select bg-dark text-light border-success" id="statusFilter">
+              <option value="all">All Status</option>
+              <option value="running">Running</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-light">View Mode</label>
+            <select class="form-select bg-dark text-light border-success" id="viewMode">
+              <option value="tree">Tree View</option>
+              <option value="radial">Radial View</option>
+              <option value="cluster">Cluster View</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Visualization Container -->
+<div class="row">
+  <div class="col-lg-9">
+    <div class="card bg-dark border-success" style="min-height: 700px;">
+      <div class="card-header bg-dark border-success d-flex justify-content-between align-items-center">
+        <span class="text-success">
+          <i class="bi bi-diagram-3"></i> Execution Tree
+        </span>
+        <div class="badge bg-success" id="nodeCount">0 nodes</div>
+      </div>
+      <div class="card-body p-0" style="position: relative; overflow: hidden;">
+        <!-- D3 Visualization -->
+        <div id="fractalVisualizer" style="width: 100%; height: 650px; background: #0a0e1a;"></div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 14, 26, 0.9); z-index: 1000;">
+          <div class="d-flex justify-content-center align-items-center h-100">
+            <div class="text-center">
+              <div class="spinner-border text-success mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <div class="text-light">Loading execution tree...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+          <div class="d-flex justify-content-center align-items-center h-100">
+            <div class="text-center text-muted">
+              <i class="bi bi-diagram-3" style="font-size: 4rem; opacity: 0.3;"></i>
+              <p class="mt-3">No execution selected</p>
+              <small>Select an execution from the dropdown above</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar: Node Details & Stats -->
+  <div class="col-lg-3">
+    <!-- Selected Node Details -->
+    <div class="card bg-dark border-info mb-3">
+      <div class="card-header bg-dark border-info">
+        <i class="bi bi-info-circle"></i> Node Details
+      </div>
+      <div class="card-body" id="nodeDetails">
+        <div class="text-muted text-center py-4">
+          <small>Click a node to view details</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execution Stats -->
+    <div class="card bg-dark border-warning">
+      <div class="card-header bg-dark border-warning">
+        <i class="bi bi-graph-up"></i> Execution Stats
+      </div>
+      <div class="card-body" id="executionStats">
+        <div class="stat-item mb-3">
+          <div class="text-muted small">Total Nodes</div>
+          <div class="text-light h4 mb-0" id="statTotalNodes">0</div>
+        </div>
+        <div class="stat-item mb-3">
+          <div class="text-muted small">Running</div>
+          <div class="text-info h4 mb-0" id="statRunning">0</div>
+        </div>
+        <div class="stat-item mb-3">
+          <div class="text-muted small">Completed</div>
+          <div class="text-success h4 mb-0" id="statCompleted">0</div>
+        </div>
+        <div class="stat-item mb-3">
+          <div class="text-muted small">Failed</div>
+          <div class="text-danger h4 mb-0" id="statFailed">0</div>
+        </div>
+        <div class="stat-item">
+          <div class="text-muted small">Pending</div>
+          <div class="text-secondary h4 mb-0" id="statPending">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card bg-dark border-secondary mt-3">
+      <div class="card-header bg-dark border-secondary">
+        <i class="bi bi-palette"></i> Legend
+      </div>
+      <div class="card-body">
+        <div class="legend-item mb-2">
+          <span class="badge bg-secondary me-2">●</span>
+          <small class="text-light">Pending</small>
+        </div>
+        <div class="legend-item mb-2">
+          <span class="badge bg-info me-2">●</span>
+          <small class="text-light">Running</small>
+        </div>
+        <div class="legend-item mb-2">
+          <span class="badge bg-success me-2">●</span>
+          <small class="text-light">Completed</small>
+        </div>
+        <div class="legend-item mb-2">
+          <span class="badge bg-danger me-2">●</span>
+          <small class="text-light">Failed</small>
+        </div>
+        <hr class="border-secondary">
+        <div class="legend-item mb-2">
+          <span class="text-primary me-2">S</span>
+          <small class="text-light">Strategic</small>
+        </div>
+        <div class="legend-item mb-2">
+          <span class="text-info me-2">T</span>
+          <small class="text-light">Tactical</small>
+        </div>
+        <div class="legend-item">
+          <span class="text-success me-2">O</span>
+          <small class="text-light">Operational</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WebSocket Status -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+  <div class="card bg-dark border-success" id="wsStatus" style="min-width: 200px;">
+    <div class="card-body p-2">
+      <small class="text-muted">WebSocket: </small>
+      <span class="badge bg-secondary" id="wsStatusBadge">Disconnected</span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global visualizer instance
+let visualizer = null;
+let wsConnection = null;
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[Visualizer Page] Initializing...');
+
+  // Initialize visualizer
+  visualizer = new FractalVisualizer('fractalVisualizer', {
+    width: document.getElementById('fractalVisualizer').clientWidth,
+    height: 650
+  });
+
+  // Load available executions
+  await loadExecutionList();
+
+  // Setup event listeners
+  setupEventListeners();
+
+  // Connect WebSocket
+  connectWebSocket();
+
+  console.log('[Visualizer Page] Initialized');
+});
+
+async function loadExecutionList() {
+  try {
+    const response = await fetch('/api/execution/active');
+    const data = await response.json();
+
+    const select = document.getElementById('executionSelect');
+    select.innerHTML = '<option value="">-- Select an execution to visualize --</option>';
+
+    if (data.executions && data.executions.length > 0) {
+      data.executions.forEach(exec => {
+        const option = document.createElement('option');
+        option.value = exec.id;
+        option.textContent = `${exec.type} - ${exec.status} (${exec.id})`;
+        select.appendChild(option);
+      });
+    } else {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No active executions';
+      option.disabled = true;
+      select.appendChild(option);
+    }
+
+  } catch (error) {
+    console.error('[Visualizer] Error loading executions:', error);
+  }
+}
+
+function setupEventListeners() {
+  // Execution selection
+  document.getElementById('executionSelect').addEventListener('change', async (e) => {
+    const executionId = e.target.value;
+    if (executionId) {
+      showLoading();
+      await loadExecution(executionId);
+      hideLoading();
+    } else {
+      showEmptyState();
+    }
+  });
+
+  // Control buttons
+  document.getElementById('centerBtn').addEventListener('click', () => {
+    if (visualizer) visualizer.centerOnRoot();
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', async () => {
+    const executionId = document.getElementById('executionSelect').value;
+    if (executionId) {
+      showLoading();
+      await loadExecution(executionId);
+      hideLoading();
+    }
+  });
+
+  // Node click event
+  document.getElementById('fractalVisualizer').addEventListener('nodeClick', (e) => {
+    showNodeDetails(e.detail.node);
+  });
+
+  // Window resize
+  window.addEventListener('resize', () => {
+    if (visualizer) {
+      const width = document.getElementById('fractalVisualizer').clientWidth;
+      visualizer.resize(width, 650);
+    }
+  });
+}
+
+async function loadExecution(executionId) {
+  try {
+    await visualizer.loadData(executionId);
+    updateStats();
+    hideEmptyState();
+
+    // Subscribe to WebSocket updates
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+      wsConnection.send(JSON.stringify({
+        action: 'subscribe',
+        execution_id: executionId
+      }));
+    }
+
+  } catch (error) {
+    console.error('[Visualizer] Error loading execution:', error);
+    showError(error.message);
+  }
+}
+
+function showNodeDetails(node) {
+  const detailsDiv = document.getElementById('nodeDetails');
+
+  const html = `
+    <div class="node-details">
+      <h6 class="text-light border-bottom border-info pb-2">${node.type}</h6>
+      <div class="detail-row mb-2">
+        <small class="text-muted">ID:</small>
+        <div class="text-light"><code class="text-info">${node.id}</code></div>
+      </div>
+      <div class="detail-row mb-2">
+        <small class="text-muted">Status:</small>
+        <div><span class="badge bg-${getStatusClass(node.status)}">${node.status}</span></div>
+      </div>
+      <div class="detail-row mb-2">
+        <small class="text-muted">Level:</small>
+        <div class="text-light">${node.level || 'N/A'}</div>
+      </div>
+      ${node.result ? `
+      <div class="detail-row mb-2">
+        <small class="text-muted">Result:</small>
+        <div class="text-light"><pre class="mb-0" style="font-size: 10px; max-height: 100px; overflow-y: auto;">${JSON.stringify(node.result, null, 2)}</pre></div>
+      </div>
+      ` : ''}
+    </div>
+  `;
+
+  detailsDiv.innerHTML = html;
+}
+
+function updateStats() {
+  if (!visualizer || !visualizer.root) return;
+
+  const nodes = visualizer.root.descendants();
+
+  const stats = {
+    total: nodes.length,
+    pending: nodes.filter(n => n.data.status === 'pending').length,
+    running: nodes.filter(n => n.data.status === 'running').length,
+    completed: nodes.filter(n => n.data.status === 'completed').length,
+    failed: nodes.filter(n => n.data.status === 'failed').length
+  };
+
+  document.getElementById('statTotalNodes').textContent = stats.total;
+  document.getElementById('statPending').textContent = stats.pending;
+  document.getElementById('statRunning').textContent = stats.running;
+  document.getElementById('statCompleted').textContent = stats.completed;
+  document.getElementById('statFailed').textContent = stats.failed;
+  document.getElementById('nodeCount').textContent = `${stats.total} nodes`;
+}
+
+function connectWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws/tool`;
+
+  wsConnection = new WebSocket(wsUrl);
+
+  wsConnection.onopen = () => {
+    console.log('[Visualizer] WebSocket connected');
+    updateWSStatus('connected');
+  };
+
+  wsConnection.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      handleWSMessage(message);
+    } catch (error) {
+      console.error('[Visualizer] WebSocket message error:', error);
+    }
+  };
+
+  wsConnection.onerror = (error) => {
+    console.error('[Visualizer] WebSocket error:', error);
+    updateWSStatus('error');
+  };
+
+  wsConnection.onclose = () => {
+    console.log('[Visualizer] WebSocket closed, reconnecting...');
+    updateWSStatus('disconnected');
+    setTimeout(connectWebSocket, 3000);
+  };
+}
+
+function handleWSMessage(message) {
+  console.log('[Visualizer] WS message:', message);
+
+  if (message.type === 'node_update' && visualizer) {
+    visualizer.updateNode(message.node_id, message.updates);
+    updateStats();
+  } else if (message.type === 'tree_update' && visualizer) {
+    visualizer.data = message.tree;
+    visualizer.render();
+    updateStats();
+  }
+}
+
+function updateWSStatus(status) {
+  const badge = document.getElementById('wsStatusBadge');
+  const statusMap = {
+    connected: { class: 'bg-success', text: 'Connected' },
+    disconnected: { class: 'bg-secondary', text: 'Disconnected' },
+    error: { class: 'bg-danger', text: 'Error' }
+  };
+
+  const config = statusMap[status] || statusMap.disconnected;
+  badge.className = `badge ${config.class}`;
+  badge.textContent = config.text;
+}
+
+function getStatusClass(status) {
+  const classes = {
+    pending: 'secondary',
+    running: 'info',
+    completed: 'success',
+    failed: 'danger'
+  };
+  return classes[status] || 'secondary';
+}
+
+function showLoading() {
+  document.getElementById('loadingOverlay').style.display = 'block';
+  document.getElementById('emptyState').style.display = 'none';
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function showEmptyState() {
+  document.getElementById('emptyState').style.display = 'block';
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function hideEmptyState() {
+  document.getElementById('emptyState').style.display = 'none';
+}
+
+function showError(message) {
+  if (Alpine && Alpine.store('notifications')) {
+    Alpine.store('notifications').error(`Visualization Error: ${message}`);
+  }
+  hideLoading();
+}
+</script>
+{% endblock %}

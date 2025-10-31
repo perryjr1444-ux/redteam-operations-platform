@@ -1,0 +1,82 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Tools Arsenal - Red Team C2{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-military-green">TOOLS ARSENAL</h1>
+            <p class="text-tactical-muted font-mono text-sm mt-1">Available security tools and utilities</p>
+        </div>
+        <div class="flex items-center gap-2 text-sm font-mono">
+            <span class="text-tactical-muted">Total Tools:</span>
+            <span class="text-military-green font-bold">{{ tools_by_category.values() | map('length') | sum if tools_by_category else 0 }}</span>
+        </div>
+    </div>
+
+    <!-- Tools Grid by Category -->
+    {% if tools_by_category %}
+        {% for category, tools in tools_by_category.items() %}
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6">
+            <h2 class="text-xl font-display font-bold text-military-amber mb-4 uppercase">
+                {{ category.replace('_', ' ') }}
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for tool in tools %}
+                <div class="bg-tactical-card border border-tactical-border rounded p-4 hover:border-military-green transition-colors">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="text-lg font-semibold text-military-green font-mono">{{ tool.name }}</h3>
+                        {% if tool.requires_root %}
+                        <span class="text-xs bg-military-red-dark text-white px-2 py-1 rounded">ROOT</span>
+                        {% endif %}
+                    </div>
+
+                    <p class="text-sm text-tactical-text mb-3">{{ tool.description }}</p>
+
+                    <div class="space-y-2">
+                        <div class="text-xs text-tactical-muted font-mono">
+                            <span class="text-military-amber">Command:</span> {{ tool.command }}
+                        </div>
+
+                        {% if tool.arguments %}
+                        <details class="text-xs">
+                            <summary class="cursor-pointer text-military-green hover:text-military-green-light">
+                                Arguments ({{ tool.arguments | length }})
+                            </summary>
+                            <ul class="mt-2 space-y-1 pl-4">
+                                {% for arg in tool.arguments %}
+                                <li class="text-tactical-muted">
+                                    <span class="text-military-amber">{{ arg.name }}</span>
+                                    {% if arg.required %}<span class="text-military-red">*</span>{% endif %}
+                                    - {{ arg.description }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                        {% endif %}
+
+                        <div class="flex gap-2 mt-3">
+                            <button class="flex-1 bg-military-green hover:bg-military-green-dark text-tactical-bg px-3 py-1 rounded text-sm font-semibold transition-colors">
+                                <i class="bi bi-play-circle"></i> Execute
+                            </button>
+                            <button class="bg-tactical-border hover:bg-tactical-muted text-tactical-text px-3 py-1 rounded text-sm transition-colors">
+                                <i class="bi bi-info-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="bg-tactical-surface border border-tactical-border rounded-lg p-12 text-center">
+            <i class="bi bi-tools text-6xl text-tactical-muted mb-4"></i>
+            <p class="text-tactical-muted">No tools available</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

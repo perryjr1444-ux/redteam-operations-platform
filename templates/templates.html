@@ -1,0 +1,41 @@
+
+{% extends "base_enhanced.html" %}
+
+{% block page_header %}
+  <h1 class="h2">Exercise Templates</h1>
+{% endblock %}
+
+{% block content %}
+<div class="table-responsive">
+  <table class="table table-dark table-striped">
+    <thead>
+      <tr>
+        <th scope="col">Template ID</th>
+        <th scope="col">Name</th>
+        <th scope="col">Category</th>
+        <th scope="col">Risk</th>
+        <th scope="col">Duration</th>
+        <th scope="col">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for template in templates %}
+      <tr>
+        <td>{{ template.template_id }}</td>
+        <td>{{ template.name }}</td>
+        <td>{{ template.category }}</td>
+        <td>{{ template.risk_level }}</td>
+        <td>{{ template.duration }}</td>
+        <td>
+          <a href="/exercise/create/{{ template.template_id }}" class="btn btn-primary btn-sm">Create</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center">No templates found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

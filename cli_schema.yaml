@@ -1,0 +1,1039 @@
+--- 
+# RED TEAM CLI INGESTION SCHEMA
+# Purpose: Machine-digestible interface for agentic CLI consumption
+# Classification: INTERNAL - Security Operations
+# Version: 1.0.0
+
+metadata:
+  schema_version: "1.0.0"
+  updated: "2025-10-15"
+  owner: "Security Operations - Red Team"
+  compatibility: "JSON Schema Draft 7, OpenAPI 3.0"
+
+# ============================================================ 
+# JSON SCHEMA DEFINITIONS
+# ============================================================ 
+
+schemas:
+
+  # Core agent definition schema
+  agent_definition:
+    type: "object"
+    required: ["id", "role", "category", "risk_level", "responsibilities", "outputs", "safety_controls"]
+    properties:
+      id:
+        type: "string"
+        pattern: "^[a-z_]+$"
+        description: "Unique agent identifier (snake_case)"
+      role:
+        type: "string"
+        description: "Human-readable role name"
+      category:
+        type: "string"
+        enum: ["discovery", "behavioral_simulation", "user_resilience", "physical_security", "network_behavioral", "remediation_testing", "coordination", "analytics"]
+      risk_level:
+        type: "string"
+        enum: ["low", "medium", "high"]
+        description: "Risk classification (determines approval requirements)"
+      responsibilities:
+        type: "array"
+        items:
+          type: "string"
+        minItems: 1
+        description: "List of agent's duties (behavioral, non-actionable)"
+      inputs:
+        type: "array"
+        items:
+          type: "string"
+        description: "Required input topics or data sources"
+      outputs:
+        type: "object"
+        required: ["topic", "format", "schema"]
+        properties:
+          topic:
+            type: "string"
+            pattern: "^(red|purple)\\.[a-z_.]+$"
+            description: "Message bus topic (namespaced)"
+          format:
+            type: "string"
+            enum: ["json", "pdf", "csv"]
+          schema:
+            type: "array"
+            items:
+              type: "string"
+            description: "Output data fields"
+      safety_controls:
+        type: "array"
+        items:
+          type: "string"
+        minItems: 1
+        description: "Built-in safety constraints and guardrails"
+      integration:
+        type: "object"
+        properties:
+          blue_visibility:
+            type: "boolean"
+            description: "Can Blue Team see agent outputs?"
+          purple_share:
+            type: "array"
+            items:
+              type: "string"
+            description: "Fields shared with purple team"
+          siem_integration:
+            type: "boolean"
+            description: "Outputs forwarded to SIEM?"
+
+  # Exercise template schema
+  exercise_template:
+    type: "object"
+    required: ["id", "name", "category", "risk_level", "duration", "phases", "success_criteria", "rollback_plan"]
+    properties:
+      id:
+        type: "string"
+        pattern: "^[a-z_]+$"
+      name:
+        type: "string"
+      category:
+        type: "string"
+        enum: ["user_awareness", "detection_validation", "physical_security", "network_monitoring"]
+      risk_level:
+        type: "string"
+        enum: ["low", "medium", "high"]
+      duration:
+        type: "string"
+        pattern: "^[0-9]+ (days?|weeks?|hours?)$"
+      description:
+        type: "string"
+        description: "High-level overview (non-actionable)"
+      phases:
+        type: "array"
+        items:
+          $ref: "#/schemas/exercise_phase"
+        minItems: 1
+      success_criteria:
+        type: "array"
+        items:
+          type: "string"
+        minItems: 1
+      rollback_plan:
+        type: "array"
+        items:
+          type: "string"
+        minItems: 1
+
+  # Exercise phase schema
+  exercise_phase:
+    type: "object"
+    required: ["phase", "duration", "owner", "tasks"]
+    properties:
+      phase:
+        type: "string"
+        pattern: "^[0-9]+_[a-z_]+$"
+        description: "Phase identifier (e.g., 1_planning, 2_execution)"
+      duration:
+        type: "string"
+        pattern: "^[0-9]+ (days?|hours?)$"
+      owner:
+        type: "string"
+        description: "Responsible agent or human role"
+      tasks:
+        type: "array"
+        items:
+          $ref: "#/schemas/task_definition"
+        minItems: 1
+      approval_gate:
+        $ref: "#/schemas/approval_gate"
+      safety_controls:
+        type: "array"
+        items:
+          type: "string"
+
+  # Task definition schema
+  task_definition:
+    type: "object"
+    required: ["id", "description"]
+    properties:
+      id:
+        type: "string"
+        pattern: "^[a-z_]+$"
+      description:
+        type: "string"
+      technique:
+        type: "string"
+        pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        description: "MITRE ATT&CK technique ID (if applicable)"
+      action:
+        type: "string"
+        description: "Behavioral action (non-actionable exploit-free description)"
+      detection_test:
+        type: "string"
+        description: "Expected detection outcome"
+      inputs:
+        type: "array"
+        items:
+          type: "string"
+      outputs:
+        type: "array"
+        items:
+          type: "string"
+      constraints:
+        type: "array"
+        items:
+          type: "string"
+
+  # Approval gate schema
+  approval_gate:
+    type: "object"
+    required: ["required_signoffs", "documentation", "criteria"]
+    properties:
+      required_signoffs:
+        oneOf:
+          - type: "array"
+            items:
+              type: "string"
+          - type: "object"
+            description: "Environment-specific signoffs"
+            patternProperties:
+              "^(staging|production|lab)$":
+                type: "array"
+                items:
+                  type: "string"
+      documentation:
+        type: "array"
+        items:
+          type: "string"
+        minItems: 1
+        description: "Required attachments (e.g., roe_document.pdf)"
+      criteria:
+        type: "array"
+        items:
+          type: "string"
+        minItems: 1
+        description: "Conditions that must be met for approval"
+      sla:
+        type: "string"
+        pattern: "^[0-9]+ (hours?|days?)$"
+        description: "Time limit for approval decision"
+
+  # Rules of Engagement (ROE) schema
+  roe_document:
+    type: "object"
+    required: ["exercise_id", "scope", "authorization", "timeline", "safety_controls", "stakeholders"]
+    properties:
+      exercise_id:
+        type: "string"
+        pattern: "^ex-[0-9]{8}-[0-9]{3}$"
+        description: "Unique exercise identifier (e.g., ex-20251015-001)"
+      scope:
+        type: "object"
+        required: ["ip_ranges", "domains", "systems", "exclusions"]
+        properties:
+          ip_ranges:
+            type: "array"
+            items:
+              type: "string"
+              pattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}(/[0-9]{1,2})?$"
+          domains:
+            type: "array"
+            items:
+              type: "string"
+          systems:
+            type: "array"
+            items:
+              type: "string"
+          user_groups:
+            type: "array"
+            items:
+              type: "string"
+            description: "For phishing/social engineering exercises"
+          exclusions:
+            type: "array"
+            items:
+              type: "string"
+            description: "Systems/networks explicitly out of scope"
+      authorization:
+        type: "object"
+        required: ["signoffs", "risk_acceptance"]
+        properties:
+          signoffs:
+            type: "array"
+            items:
+              type: "object"
+              required: ["role", "name", "email", "date"]
+              properties:
+                role:
+                  type: "string"
+                name:
+                  type: "string"
+                email:
+                  type: "string"
+                  format: "email"
+                date:
+                  type: "string"
+                  format: "date"
+          risk_acceptance:
+            type: "boolean"
+            description: "Has Business Unit Owner accepted risk?"
+      timeline:
+        type: "object"
+        required: ["start", "end", "timezone"]
+        properties:
+          start:
+            type: "string"
+            format: "date-time"
+          end:
+            type: "string"
+            format: "date-time"
+          timezone:
+            type: "string"
+            description: "IANA timezone (e.g., America/New_York)"
+          blackout_periods:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                start:
+                  type: "string"
+                  format: "date-time"
+                end:
+                  type: "string"
+                  format: "date-time"
+                reason:
+                  type: "string"
+      safety_controls:
+        type: "object"
+        required: ["kill_switch_operator", "rollback_plan", "non_destructive"]
+        properties:
+          kill_switch_operator:
+            type: "object"
+            required: ["name", "phone", "email"]
+            properties:
+              name:
+                type: "string"
+              phone:
+                type: "string"
+              email:
+                type: "string"
+                format: "email"
+          rollback_plan:
+            type: "array"
+            items:
+              type: "string"
+            minItems: 1
+          non_destructive:
+            type: "boolean"
+            default: true
+          data_exfiltration_allowed:
+            type: "boolean"
+            default: false
+            description: "Synthetic data only, never real PII/secrets"
+      stakeholders:
+        type: "object"
+        required: ["notified", "escalation_chain"]
+        properties:
+          notified:
+            type: "array"
+            items:
+              type: "object"
+              required: ["role", "name", "email", "notification_date"]
+              properties:
+                role:
+                  type: "string"
+                name:
+                  type: "string"
+                email:
+                  type: "string"
+                  format: "email"
+                notification_date:
+                  type: "string"
+                  format: "date"
+          escalation_chain:
+            type: "array"
+            items:
+              type: "object"
+              required: ["level", "role", "contact"]
+              properties:
+                level:
+                  type: "integer"
+                role:
+                  type: "string"
+                contact:
+                  type: "string"
+
+  # Agent output message schema
+  agent_message:
+    type: "object"
+    required: ["envelope", "payload"]
+    properties:
+      envelope:
+        type: "object"
+        required: ["timestamp", "source_agent_id", "destination_topic", "message_type", "correlation_id", "classification"]
+        properties:
+          timestamp:
+            type: "string"
+            format: "date-time"
+          source_agent_id:
+            type: "string"
+          destination_topic:
+            type: "string"
+            pattern: "^(red|blue|purple)\\.[a-z_.]+$"
+          message_type:
+            type: "string"
+            enum: ["telemetry", "finding", "status", "alert", "report"]
+          correlation_id:
+            type: "string"
+            description: "Links messages to specific exercise (exercise_id)"
+          classification:
+            type: "string"
+            enum: ["INTERNAL", "CONFIDENTIAL", "RESTRICTED"]
+      payload:
+        type: "object"
+        description: "Agent-specific data (validated against agent output schema)"
+
+  # Exercise lifecycle state
+  exercise_state:
+    type: "object"
+    required: ["exercise_id", "state", "timestamp", "metadata"]
+    properties:
+      exercise_id:
+        type: "string"
+        pattern: "^ex-[0-9]{8}-[0-9]{3}$"
+      state:
+        type: "string"
+        enum: ["draft", "pending_approval", "approved", "scheduled", "in_progress", "paused", "completed", "reported", "aborted", "archived"]
+      timestamp:
+        type: "string"
+        format: "date-time"
+      metadata:
+        type: "object"
+        properties:
+          current_phase:
+            type: "string"
+          progress_percent:
+            type: "integer"
+            minimum: 0
+            maximum: 100
+          agents_active:
+            type: "array"
+            items:
+              type: "string"
+          last_checkpoint:
+            type: "string"
+            format: "date-time"
+
+# ============================================================ 
+# CLI COMMAND INTERFACE
+# ============================================================ 
+
+cli_commands:
+
+  # List available templates
+  - command: "templates list"
+    description: "List all available exercise templates"
+    parameters: []
+    output_format: "table"
+    output_schema:
+      columns: ["template_id", "name", "category", "risk_level", "duration"]
+
+  # Show template details
+  - command: "templates show"
+    description: "Display full template definition"
+    parameters:
+      - name: "template_id"
+        type: "string"
+        required: true
+    output_format: "yaml"
+
+  # Create exercise from template
+  - command: "exercise create"
+    description: "Instantiate new exercise from template"
+    parameters:
+      - name: "template"
+        type: "string"
+        required: true
+        description: "Template ID to use"
+      - name: "scope"
+        type: "string"
+        required: true
+        enum: ["lab", "staging", "production"]
+      - name: "duration"
+        type: "string"
+        required: false
+        pattern: "^[0-9]+ (days?|weeks?)$"
+        description: "Override template duration"
+      - name: "roe_file"
+        type: "string"
+        required: true
+        description: "Path to ROE document (JSON/YAML)"
+    output:
+      exercise_id: "string"
+      state: "draft"
+      next_steps: "array of strings"
+    validation:
+      - "ROE document must conform to roe_document schema"
+      - "Scope must be authorized for template risk level"
+
+  # Submit exercise for approval
+  - command: "exercise submit"
+    description: "Submit exercise to approval workflow"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+      - name: "attachments"
+        type: "array"
+        required: true
+        description: "Paths to required documentation"
+    output:
+      approval_gate_id: "string"
+      required_signoffs: "array"
+      estimated_approval_time: "string"
+
+  # Check exercise status
+  - command: "exercise status"
+    description: "Get current exercise state and progress"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+    output_format: "json"
+    output_schema:
+      $ref: "#/schemas/exercise_state"
+
+  # List all exercises
+  - command: "exercise list"
+    description: "List exercises with optional filtering"
+    parameters:
+      - name: "state"
+        type: "string"
+        required: false
+        enum: ["draft", "pending_approval", "approved", "scheduled", "in_progress", "paused", "completed", "reported", "aborted", "archived"]
+      - name: "limit"
+        type: "integer"
+        required: false
+        default: 20
+    output_format: "table"
+    output_schema:
+      columns: ["exercise_id", "template", "state", "progress", "start_date", "owner"]
+
+  # Start approved exercise
+  - command: "exercise start"
+    description: "Begin execution of approved, scheduled exercise"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+    validation:
+      - "Exercise state must be 'scheduled'"
+      - "Current time must be within ROE timeline"
+      - "All required agents must be healthy"
+    output:
+      status: "started"
+      active_agents: "array"
+      kill_switch_contact: "string"
+
+  # Pause running exercise
+  - command: "exercise pause"
+    description: "Temporarily halt exercise execution"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+      - name: "reason"
+        type: "string"
+        required: true
+    actions:
+      - "Suspend all active agents"
+      - "Preserve current state"
+      - "Notify stakeholders"
+
+  # Resume paused exercise
+  - command: "exercise resume"
+    description: "Continue paused exercise from last checkpoint"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+    validation:
+      - "Exercise state must be 'paused'"
+      - "No unresolved blockers"
+
+  # Abort exercise (kill switch)
+  - command: "exercise abort"
+    description: "Emergency stop for unintended impact or violations"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+      - name: "reason"
+        type: "string"
+        required: true
+        enum: ["unintended_impact", "roe_violation", "security_incident", "stakeholder_request"]
+    actions:
+      - "Immediate suspend of all agents"
+      - "Preserve evidence (logs, telemetry)"
+      - "Trigger rollback plan"
+      - "Notify: Red Lead, Blue Lead, CISO, Legal"
+      - "Create incident ticket"
+    output:
+      incident_id: "string"
+      evidence_preserved: "array of paths"
+
+  # Generate exercise report
+  - command: "exercise report"
+    description: "Generate findings report and action items"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+      - name: "format"
+        type: "string"
+        required: false
+        enum: ["pdf", "json", "markdown"]
+        default: "pdf"
+      - name: "audience"
+        type: "string"
+        required: false
+        enum: ["executive", "technical", "audit"]
+        default: "technical"
+    validation:
+      - "Exercise state must be 'completed' or 'reported'"
+    output:
+      report_path: "string"
+      action_items_count: "integer"
+      coverage_gap_index: "number"
+
+  # List active agents
+  - command: "agents list"
+    description: "Show all agents and their health status"
+    parameters:
+      - name: "category"
+        type: "string"
+        required: false
+    output_format: "table"
+    output_schema:
+      columns: ["agent_id", "role", "category", "risk_level", "status", "last_heartbeat"]
+
+  # Show agent details
+  - command: "agents show"
+    description: "Display agent definition and capabilities"
+    parameters:
+      - name: "agent_id"
+        type: "string"
+        required: true
+    output_format: "yaml"
+    output_schema:
+      $ref: "#/schemas/agent_definition"
+
+  # Validate ROE document
+  - command: "roe validate"
+    description: "Check ROE document against schema"
+    parameters:
+      - name: "roe_file"
+        type: "string"
+        required: true
+    output:
+      valid: "boolean"
+      errors: "array of validation errors"
+      warnings: "array of warnings (non-blocking)"
+
+  # Generate ROE template
+  - command: "roe generate"
+    description: "Create ROE document skeleton for exercise"
+    parameters:
+      - name: "exercise_id"
+        type: "string"
+        required: true
+      - name: "output_file"
+        type: "string"
+        required: true
+    output:
+      file_created: "string"
+      next_steps: "array of instructions"
+
+  # Show metrics dashboard
+  - command: "metrics show"
+    description: "Display red team performance metrics"
+    parameters:
+      - name: "metric"
+        type: "string"
+        required: false
+        enum: ["detection_rate", "mttd", "mttr", "false_positive_rate", "coverage_gap_index", "roe_compliance"]
+      - name: "time_range"
+        type: "string"
+        required: false
+        pattern: "^[0-9]+ (days?|weeks?|months?)$"
+        default: "30 days"
+    output_format: "json"
+
+  # Health check
+  - command: "health"
+    description: "System health and connectivity check"
+    parameters: []
+    output:
+      status: "healthy | degraded | unhealthy"
+      components:
+        - name: "message_bus"
+          status: "string"
+          latency_ms: "number"
+        - name: "agent_heartbeats"
+          status: "string"
+          agents_online: "integer"
+        - name: "siem_integration"
+          status: "string"
+
+# ============================================================ 
+# VALIDATION RULES
+# ============================================================ 
+
+validation_rules:
+
+  # Scope validation
+  scope_validation:
+    - rule: "ip_ranges_must_be_authorized"
+      description: "All IP ranges must exist in approved asset inventory"
+      enforcement: "blocking"
+      check: "compare against cmdb_authorized_ranges"
+
+    - rule: "production_requires_high_approval"
+      description: "Production scope requires CISO + Legal + BU Owner signoff"
+      enforcement: "blocking"
+      check: "if scope=production, require high_risk_approval_gate"
+
+    - rule: "exclusions_honored"
+      description: "Agents must not interact with excluded systems"
+      enforcement: "blocking"
+      check: "runtime agent boundary validation"
+
+  # Timeline validation
+  timeline_validation:
+    - rule: "no_blackout_overlap"
+      description: "Exercise cannot run during blackout periods"
+      enforcement: "blocking"
+      check: "ROE timeline must not overlap with business blackout dates"
+
+    - rule: "minimum_notice"
+      description: "Production exercises require 7-day advance notice"
+      enforcement: "blocking"
+      check: "if scope=production, start_date >= now + 7 days"
+
+    - rule: "reasonable_duration"
+      description: "Exercise duration must be <= 30 days"
+      enforcement: "warning"
+      check: "end_date - start_date <= 30 days"
+
+  # Safety validation
+  safety_validation:
+    - rule: "rollback_plan_required"
+      description: "All exercises must have documented rollback plan"
+      enforcement: "blocking"
+      check: "ROE document contains non-empty rollback_plan array"
+
+    - rule: "kill_switch_operator_assigned"
+      description: "Kill switch operator must be contactable 24/7"
+      enforcement: "blocking"
+      check: "ROE document contains valid phone + email for kill_switch_operator"
+
+    - rule: "non_destructive_default"
+      description: "Destructive actions require explicit approval"
+      enforcement: "blocking"
+      check: "if non_destructive=false, require CISO approval + LAB_ONLY environment"
+
+    - rule: "no_pii_exfiltration"
+      description: "Real PII/secrets must never be exfiltrated"
+      enforcement: "blocking"
+      check: "runtime DLP monitoring + agent self-checks"
+
+  # Compliance validation
+  compliance_validation:
+    - rule: "legal_review_for_high_risk"
+      description: "High-risk exercises require legal counsel review"
+      enforcement: "blocking"
+      check: "if risk_level=high, require Legal signoff"
+
+    - rule: "insurance_coverage_verified"
+      description: "Cyber insurance must cover exercise activities"
+      enforcement: "warning"
+      check: "insurance_verification.pdf attached to ROE"
+
+    - rule: "privacy_impact_assessment"
+      description: "Exercises involving PII require privacy review"
+      enforcement: "blocking"
+      check: "if user_groups defined, require privacy_assessment.pdf"
+
+  # Agent-specific validation
+  agent_validation:
+    - rule: "exploit_validation_lab_only"
+      description: "exploit_validation agent can only run in lab environment"
+      enforcement: "blocking"
+      check: "if agent=exploit_validation, environment must equal 'lab'"
+
+    - rule: "phishing_requires_consent"
+      description: "Phishing exercises require documented user consent"
+      enforcement: "blocking"
+      check: "if agent=phishing_simulation, user_consent_records.csv must exist"
+
+    - rule: "physical_access_coordination"
+      description: "Physical exercises must notify facility security"
+      enforcement: "blocking"
+      check: "if agent=physical_access_sim, stakeholders must include Facility Manager"
+
+# ============================================================ 
+# ERROR HANDLING
+# ============================================================ 
+
+error_codes:
+
+  # Validation errors (400 range)
+  - code: 400
+    name: "VALIDATION_ERROR"
+    description: "Input failed schema validation"
+    retry: false
+
+  - code: 401
+    name: "UNAUTHORIZED"
+    description: "Insufficient permissions for operation"
+    retry: false
+
+  - code: 403
+    name: "ROE_VIOLATION"
+    description: "Action would violate Rules of Engagement"
+    retry: false
+    action: "Suspend agent, notify stakeholders"
+
+  - code: 404
+    name: "NOT_FOUND"
+    description: "Exercise or template not found"
+    retry: false
+
+  - code: 409
+    name: "STATE_CONFLICT"
+    description: "Exercise state does not allow this operation"
+    retry: false
+
+  # Agent errors (500 range)
+  - code: 500
+    name: "AGENT_ERROR"
+    description: "Agent encountered internal error"
+    retry: true
+    max_retries: 3
+
+  - code: 503
+    name: "AGENT_UNAVAILABLE"
+    description: "Agent offline or unhealthy"
+    retry: true
+    max_retries: 5
+
+  - code: 504
+    name: "AGENT_TIMEOUT"
+    description: "Agent did not respond within SLA"
+    retry: true
+
+  # System errors (600 range)
+  - code: 600
+    name: "MESSAGE_BUS_ERROR"
+    description: "Communication failure on message bus"
+    retry: true
+
+  - code: 601
+    name: "INTEGRATION_ERROR"
+    description: "External system (SIEM, ticketing) unavailable"
+    retry: true
+
+  - code: 602
+    name: "KILL_SWITCH_ACTIVATED"
+    description: "Emergency stop triggered"
+    retry: false
+    action: "Preserve evidence, notify all stakeholders"
+
+# ============================================================ 
+# USAGE EXAMPLES
+# ============================================================ 
+
+usage_examples:
+
+  example_1_list_templates:
+    description: "List all available exercise templates"
+    command: "redteam-cli templates list"
+    output: |
+      TEMPLATE_ID                    NAME                                 CATEGORY              RISK    DURATION
+      phishing_resilience_campaign   Phishing Resilience Campaign        user_awareness        low     2 weeks
+      apt_emulation_attack_chain     APT Emulation - Full Attack Chain   detection_validation  medium  1 week
+      network_egress_monitoring      Network Egress Monitoring Test      detection_validation  low     3 days
+      physical_access_tabletop       Physical Access Tabletop Exercise   physical_security     low     1 day
+
+  example_2_create_exercise:
+    description: "Create new exercise from APT emulation template"
+    command: |
+      redteam-cli exercise create \
+        --template=apt_emulation_attack_chain \
+        --scope=staging \
+        --roe_file=./roe_apt_staging.yaml
+    output: |
+      {
+        "exercise_id": "ex-20251015-001",
+        "state": "draft",
+        "next_steps": [
+          "Review and customize exercise phases",
+          "Attach required documentation (risk_acceptance.pdf)",
+          "Submit for approval: redteam-cli exercise submit --exercise_id=ex-20251015-001"
+        ]
+      }
+
+  example_3_submit_for_approval:
+    description: "Submit exercise to approval workflow"
+    command: |
+      redteam-cli exercise submit \
+        --exercise_id=ex-20251015-001 \
+        --attachments=roe_document.pdf,risk_acceptance.pdf
+    output: |
+      {
+        "approval_gate_id": "medium_risk_approval",
+        "required_signoffs": ["Red Team Lead", "Security Director"],
+        "estimated_approval_time": "48 hours",
+        "status": "pending_approval"
+      }
+
+  example_4_start_exercise:
+    description: "Start approved and scheduled exercise"
+    command: "redteam-cli exercise start --exercise_id=ex-20251015-001"
+    output: |
+      {
+        "status": "started",
+        "active_agents": ["recon_simulation", "adversary_emulation"],
+        "kill_switch_contact": "Blue Team On-Call: +1-555-0100"
+      }
+
+  example_5_kill_switch:
+    description: "Emergency abort due to unintended impact"
+    command: |
+      redteam-cli exercise abort \
+        --exercise_id=ex-20251015-001 \
+        --reason=unintended_impact
+    output: |
+      {
+        "incident_id": "inc-20251015-042",
+        "status": "aborted",
+        "evidence_preserved": [
+          "/var/log/redteam/ex-20251015-001/agent_logs.tar.gz",
+          "/var/log/redteam/ex-20251015-001/telemetry.json"
+        ],
+        "notifications_sent": ["CISO", "Legal", "Blue Team Lead"],
+        "next_steps": "Incident investigation initiated. Rollback plan executing."
+      }
+
+  example_6_generate_report:
+    description: "Generate executive summary after exercise completion"
+    command: |
+      redteam-cli exercise report \
+        --exercise_id=ex-20251015-001 \
+        --format=pdf \
+        --audience=executive
+    output: |
+      {
+        "report_path": "/var/reports/ex-20251015-001_executive_summary.pdf",
+        "action_items_count": 12,
+        "coverage_gap_index": 18,
+        "summary": "Detected 82% of attack chain. 3 critical gaps identified in lateral movement detection."
+      }
+
+  example_7_validate_roe:
+    description: "Validate ROE document before submission"
+    command: "redteam-cli roe validate --roe_file=./roe_apt_staging.yaml"
+    output: |
+      {
+        "valid": false,
+        "errors": [
+          "scope.ip_ranges[2]: '192.168.1.256/24' is not a valid CIDR",
+          "authorization.signoffs: missing required field 'date' for CISO"
+        ],
+        "warnings": [
+          "timeline.duration: 14 days exceeds recommended 7 days for staging exercises"
+        ]
+      }
+
+  example_8_health_check:
+    description: "Check system health before starting exercise"
+    command: "redteam-cli health"
+    output: |
+      {
+        "status": "healthy",
+        "components": {
+          "message_bus": {
+            "status": "online",
+            "latency_ms": 12
+          },
+          "agent_heartbeats": {
+            "status": "online",
+            "agents_online": 8,
+            "agents_offline": 0
+          },
+          "siem_integration": {
+            "status": "online",
+            "last_event_sent": "2025-10-15T10:30:00Z"
+          }
+        }
+      }
+
+# ============================================================ 
+# INTEGRATION ENDPOINTS
+# ============================================================ 
+
+integration_endpoints:
+
+  # SIEM integration
+  siem:
+    protocol: "syslog"
+    format: "CEF (Common Event Format)"
+    port: 514
+    events:
+      - "agent.started"
+      - "agent.stopped"
+      - "exercise.state_change"
+      - "telemetry.synthetic (from agents)"
+      - "roe.violation"
+      - "kill_switch.activated"
+
+  # Ticketing system integration
+  ticketing:
+    vendor: "Jira"
+    api_base: "https://jira.example.com/rest/api/2"
+    authentication: "bearer_token"
+    endpoints:
+      - path: "/issue"
+        method: "POST"
+        purpose: "Create purple team action items"
+        payload_schema:
+          project: "REDTEAM"
+          issuetype: "Task"
+          summary: "string"
+          description: "string (markdown)"
+          priority: "Critical | High | Medium | Low"
+          labels: ["purple_team", "detection_gap", "exercise_id"]
+
+  # Threat intel platform
+  threat_intel:
+    vendor: "MISP"
+    api_base: "https://misp.example.com"
+    protocol: "TAXII 2.1"
+    endpoints:
+      - path: "/events"
+        method: "POST"
+        purpose: "Export synthetic IOCs for training"
+      - path: "/galaxies"
+        method: "GET"
+        purpose: "Import APT group TTP profiles"
+
+  # Orchestration (infrastructure provisioning)
+  orchestration:
+    vendor: "Terraform"
+    purpose: "Lab environment provisioning and teardown"
+    hooks:
+      - event: "exercise.approved"
+        action: "terraform apply -var-file=lab_config.tfvars"
+      - event: "exercise.completed"
+        action: "terraform destroy -auto-approve"
+
+# ============================================================ 
+# END OF CLI SCHEMA
+# ============================================================ 

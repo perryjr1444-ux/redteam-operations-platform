@@ -1,0 +1,232 @@
+[8m================================================================================
+                  METRICS ANALYTICS DASHBOARD ARCHITECTURE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER BROWSER                                    │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                     /metrics/dashboard                                  │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │ │
+│  │  │  METRICS ANALYTICS DASHBOARD (Alpine.js + Chart.js)             │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │  │ │
+│  │  │  │  System     │  │  System     │  │  Running    │             │  │ │
+│  │  │  │  Overview   │  │  Health     │  │  Containers │             │  │ │
+│  │  │  │  Cards      │  │  Metric     │  │  Count      │             │  │ │
+│  │  │  └─────────────┘  └─────────────┘  └─────────────┘             │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌───────────────────────────────────────────────────────────┐  │  │ │
+│  │  │  │  TIME RANGE SELECTOR                                      │  │  │ │
+│  │  │  │  [ 1h ] [ 24h ] [ 7d ] [ 30d ]                           │  │  │ │
+│  │  │  └───────────────────────────────────────────────────────────┘  │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌──────────────────────┐  ┌──────────────────────┐            │  │ │
+│  │  │  │  Performance Chart   │  │  Success Rate Chart  │            │  │ │
+│  │  │  │  (Line Chart)        │  │  (Doughnut Chart)    │            │  │ │
+│  │  │  └──────────────────────┘  └──────────────────────┘            │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌──────────────────────┐  ┌──────────────────────┐            │  │ │
+│  │  │  │  Tool Usage Chart    │  │  Activity Chart      │            │  │ │
+│  │  │  │  (Bar Chart)         │  │  (Line Chart)        │            │  │ │
+│  │  │  └──────────────────────┘  └──────────────────────┘            │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌──────────────────────────────────────────────────────────┐  │  │ │
+│  │  │  │  Resource Consumption Timeline (Multi-line Area Chart)   │  │  │ │
+│  │  │  └──────────────────────────────────────────────────────────┘  │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌──────────────────────────────────────────────────────────┐  │  │ │
+│  │  │  │  Container Utilization Table                             │  │  │ │
+│  │  │  │  ┌────┬──────┬────────┬─────┬────────┬────────┬──────┐  │  │  │ │
+│  │  │  │  │ ID │ Type │ Status │ CPU │ Memory │ Uptime │ Ops  │  │  │  │ │
+│  │  │  │  ├────┼──────┼────────┼─────┼────────┼────────┼──────┤  │  │  │ │
+│  │  │  │  │... │ ...  │  ...   │ ... │  ...   │  ...   │ ...  │  │  │  │ │
+│  │  │  │  └────┴──────┴────────┴─────┴────────┴────────┴──────┘  │  │  │ │
+│  │  │  └──────────────────────────────────────────────────────────┘  │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌──────────────────────────────────────────────────────────┐  │  │ │
+│  │  │  │  Recent Activity Log                                     │  │  │ │
+│  │  │  │  • Nmap scan completed (2m ago)                          │  │  │ │
+│  │  │  │  • Container started (5m ago)                            │  │  │ │
+│  │  │  │  • SQLMap test initiated (8m ago)                        │  │  │ │
+│  │  │  └──────────────────────────────────────────────────────────┘  │  │ │
+│  │  │                                                                  │  │ │
+│  │  │  ┌──────────────────────────────────────────────────────────┐  │  │ │
+│  │  │  │  Export: [CSV] [JSON]                    [Refresh]       │  │  │ │
+│  │  │  └──────────────────────────────────────────────────────────┘  │  │ │
+│  │  └──────────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ▲
+                                      │ HTTP/HTTPS
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            FASTAPI BACKEND                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │  ROUTES (/app/main.py)                                                 │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  GET /metrics/dashboard                                          │ │ │
+│  │  │  → Returns: metrics_dashboard.html template                      │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │  API ROUTES (/app/routes/api_enhanced.py)                             │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  GET /api/metrics/live                                           │ │ │
+│  │  │  → active_exercises, system_health, running_containers, uptime   │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  GET /api/metrics/activity                                       │ │ │
+│  │  │  → operation_status, tool_usage, recent_activity, timeline       │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  GET /api/attacks/containers                                     │ │ │
+│  │  │  → container statistics for table                               │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │  SERVICES (Dependency Injection)                                       │ │
+│  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐    │ │
+│  │  │  AgentManager    │  │  ContainerPool   │  │  Fractal         │    │ │
+│  │  │  (AI Agents)     │  │  (Containers)    │  │  Orchestrator    │    │ │
+│  │  └──────────────────┘  └──────────────────┘  └──────────────────┘    │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │  DATABASE (SQLite/PostgreSQL)                                          │ │
+│  │  • Exercises                                                           │ │
+│  │  • Templates                                                           │ │
+│  │  • Attack Containers                                                   │ │
+│  │  • (Future: Historical Metrics)                                        │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+                            DATA FLOW DIAGRAM
+================================================================================
+
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│  User    │────▶│ Alpine.js│────▶│  FastAPI │────▶│ Services │
+│  Browser │     │Component │     │  Routes  │     │(Managers)│
+└──────────┘     └──────────┘     └──────────┘     └──────────┘
+      ▲                │                 │                │
+      │                │                 │                ▼
+      │                │                 │          ┌──────────┐
+      │                │                 │          │ Database │
+      │                │                 │          │  or Mock │
+      │                │                 │          └──────────┘
+      │                │                 │                │
+      │                │                 │                │
+      │                ▼                 ▼                │
+      │          ┌──────────┐     ┌──────────┐          │
+      │          │ Chart.js │     │   JSON   │◀─────────┘
+      │          │ Rendering│     │ Response │
+      │          └──────────┘     └──────────┘
+      │                │                 │
+      │                │                 │
+      └────────────────┴─────────────────┘
+              Visual Update
+
+================================================================================
+                         AUTO-REFRESH INTERVALS
+================================================================================
+
+  Live Metrics (/api/metrics/live)
+  ├─ Interval: 5 seconds
+  └─ Updates: System overview cards
+
+  Activity Data (/api/metrics/activity)
+  ├─ Interval: 10 seconds
+  └─ Updates: Charts, tool usage, activity log
+
+  Historical Charts
+  ├─ Interval: 30 seconds
+  └─ Updates: All chart data
+
+================================================================================
+                            FILE STRUCTURE
+================================================================================
+
+${HOME}/projects/redteam_py_app/
+│
+├── templates/
+│   ├── base.html                          (Modified: Navigation)
+│   └── metrics_dashboard.html             (New: Dashboard template)
+│
+├── static/
+│   └── js/
+│       └── metrics-dashboard.js           (New: Alpine component)
+│
+├── app/
+│   ├── main.py                            (Modified: Added route)
+│   └── routes/
+│       └── api_enhanced.py                (Modified: Enhanced endpoint)
+│
+├── tests/
+│   └── test_metrics_dashboard.py          (New: Test suite)
+│
+└── docs/
+    ├── METRICS_DASHBOARD.md               (New: User guide)
+    └── METRICS_DASHBOARD_ARCHITECTURE.txt (New: This file)
+
+================================================================================
+                         TECHNOLOGY STACK
+================================================================================
+
+Frontend:
+  • Alpine.js 3.x          - Reactive components
+  • Chart.js 4.x           - Data visualization
+  • Bootstrap 5            - UI framework (dark theme)
+  • Bootstrap Icons        - Icons
+
+Backend:
+  • FastAPI                - Web framework
+  • Python 3.14            - Language
+  • Pydantic               - Data validation
+  • SQLAlchemy             - Database ORM
+
+Development:
+  • Pytest                 - Testing framework
+  • Uvicorn                - ASGI server
+
+================================================================================
+                         COMPONENT HIERARCHY
+================================================================================
+
+metricsDashboard (Alpine.js Component)
+  │
+  ├── State Management
+  │   ├── metrics (live data)
+  │   ├── containerStats
+  │   ├── activityLog
+  │   └── historicalData
+  │
+  ├── Chart Management
+  │   ├── performanceChart (Chart.js)
+  │   ├── successRateChart (Chart.js)
+  │   ├── toolUsageChart (Chart.js)
+  │   ├── activityChart (Chart.js)
+  │   └── resourceChart (Chart.js)
+  │
+  ├── Data Fetching
+  │   ├── fetchLiveMetrics()
+  │   ├── fetchActivityData()
+  │   ├── fetchContainerStats()
+  │   └── generateHistoricalData()
+  │
+  ├── User Interactions
+  │   ├── setTimeRange()
+  │   ├── refreshAllData()
+  │   ├── exportData()
+  │   └── clearActivityLog()
+  │
+  └── Utility Functions
+      ├── formatTime()
+      ├── calculateUptime()
+      ├── formatBytes()
+      ├── getHealthColor()
+      └── hexToRgba()
+
+================================================================================
+[0m

@@ -1,0 +1,299 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Security Analytics Dashboard - Red Team C2{% endblock %}
+
+{% block extra_head %}
+<!-- Dashboard CSS -->
+<link href="/static/css/shadcn-dashboards.css" rel="stylesheet">
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js (must load before dashboard-components) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- D3.js for MITRE heatmap -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+<!-- Dashboard Components -->
+<script src="/static/js/dashboard-components.js"></script>
+
+<!-- MITRE Heatmap -->
+<script src="/static/js/components/MitreHeatmap.js"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="{
+  analytics: $store.analyticsDashboard,
+  refreshControl: window.dashboardComponents.refreshControl('analyticsDashboard', 10000)
+}" x-init="analytics.startAutoRefresh(10000)" class="p-6">
+
+  <!-- Page Header -->
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <h1 class="text-3xl font-bold mb-2">Security Analytics Dashboard</h1>
+      <p class="text-tactical-muted">MITRE ATT&CK coverage & vulnerability analysis</p>
+    </div>
+
+    <!-- Refresh Controls -->
+    <div x-data="refreshControl" class="flex gap-4 items-center">
+      <select x-model="currentInterval" @change="setInterval($event.target.value)" class="bg-tactical-card border border-tactical-border rounded px-3 py-2">
+        <template x-for="interval in intervals" :key="interval">
+          <option :value="interval" x-text="(interval / 1000) + 's'"></option>
+        </template>
+      </select>
+
+      <button @click="toggle()" class="px-4 py-2 rounded border" :class="isPaused ? 'border-military-green text-military-green' : 'border-military-amber text-military-amber'">
+        <i :class="isPaused ? 'bi bi-play-fill' : 'bi bi-pause-fill'"></i>
+        <span x-text="isPaused ? 'Resume' : 'Pause'"></span>
+      </button>
+
+      <button @click="manualRefresh()" class="px-4 py-2 rounded border border-military-green text-military-green">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- Security Posture Overview (3 cards) -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="security-card" data-severity="critical">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-shield-fill-check" style="color: #06ffa5"></i>
+        <span style="color: #06ffa5">Security Posture</span>
+      </h3>
+      <div class="text-center my-4">
+        <span class="text-5xl font-mono font-bold" style="color: #06ffa5" x-text="analytics.data.posture?.score || 0"></span>
+        <span class="text-2xl text-tactical-muted">/100</span>
+      </div>
+      <div class="flex items-center justify-center gap-2 text-sm">
+        <i class="bi" :class="analytics.data.posture?.trend === 'up' ? 'bi-arrow-up text-military-green' : analytics.data.posture?.trend === 'down' ? 'bi-arrow-down text-severity-critical' : 'bi-arrow-right text-military-amber'"></i>
+        <span class="text-tactical-muted capitalize" x-text="analytics.data.posture?.trend || 'stable'"></span>
+      </div>
+    </div>
+
+    <div class="security-card" data-severity="high">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-bug-fill" style="color: #ff6b35"></i>
+        <span style="color: #ff6b35">Total Vulnerabilities</span>
+      </h3>
+      <div class="text-center my-4">
+        <span class="text-5xl font-mono font-bold" style="color: #ff6b35" x-text="analytics.data.vulnerabilities?.total || 0"></span>
+      </div>
+      <div class="grid grid-cols-4 gap-2 text-center text-xs">
+        <div>
+          <div class="font-mono font-bold text-severity-critical" x-text="analytics.data.vulnerabilities?.distribution?.critical || 0"></div>
+          <div class="text-tactical-muted">Critical</div>
+        </div>
+        <div>
+          <div class="font-mono font-bold text-severity-high" x-text="analytics.data.vulnerabilities?.distribution?.high || 0"></div>
+          <div class="text-tactical-muted">High</div>
+        </div>
+        <div>
+          <div class="font-mono font-bold text-severity-medium" x-text="analytics.data.vulnerabilities?.distribution?.medium || 0"></div>
+          <div class="text-tactical-muted">Medium</div>
+        </div>
+        <div>
+          <div class="font-mono font-bold text-severity-low" x-text="analytics.data.vulnerabilities?.distribution?.low || 0"></div>
+          <div class="text-tactical-muted">Low</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="security-card" data-severity="medium">
+      <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <i class="bi bi-bullseye" style="color: #ffd23f"></i>
+        <span style="color: #ffd23f">Attack Surface</span>
+      </h3>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span class="text-tactical-muted">Exposed Services</span>
+          <span class="font-mono font-bold" style="color: #ffd23f" x-text="analytics.data.posture?.attack_surface?.exposed_services || 0"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-tactical-muted">Open Ports</span>
+          <span class="font-mono font-bold" style="color: #ffd23f" x-text="analytics.data.posture?.attack_surface?.open_ports || 0"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-tactical-muted">Vulnerable Systems</span>
+          <span class="font-mono font-bold text-severity-critical" x-text="analytics.data.posture?.attack_surface?.vulnerable_systems || 0"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-tactical-muted">Critical Assets</span>
+          <span class="font-mono font-bold text-severity-high" x-text="analytics.data.posture?.attack_surface?.critical_assets || 0"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MITRE ATT&CK Heatmap -->
+  <div class="card bg-tactical-card border border-tactical-border rounded p-4 mb-6">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+      <i class="bi bi-grid-3x3-gap-fill text-severity-critical"></i>
+      MITRE ATT&CK Coverage Matrix
+      <span class="ml-auto text-sm text-tactical-muted">
+        <span class="font-mono" x-text="analytics.data.mitre?.total_real || 0"></span> real techniques
+        / <span class="font-mono" x-text="analytics.data.mitre?.total_coverage || 0"></span> total
+      </span>
+    </h3>
+    <div id="mitreHeatmap" class="w-full" style="height: 600px;"></div>
+  </div>
+
+  <!-- Vulnerability Trends & Tool Effectiveness -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="chart-wrapper">
+      <h3 class="text-lg font-bold mb-4">Vulnerability Trends (7 Days)</h3>
+      <canvas id="vulnTrendsChart"></canvas>
+    </div>
+
+    <div class="chart-wrapper">
+      <h3 class="text-lg font-bold mb-4">Tool Effectiveness</h3>
+      <canvas id="toolEffectivenessChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Top Vulnerabilities Table -->
+  <div class="card bg-tactical-card border border-tactical-border rounded p-4 mb-6">
+    <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+      <i class="bi bi-exclamation-octagon-fill text-severity-critical"></i>
+      Top Vulnerabilities
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="border-b border-tactical-border">
+          <tr>
+            <th class="text-left p-2 text-tactical-muted">CVE ID</th>
+            <th class="text-left p-2 text-tactical-muted">Severity</th>
+            <th class="text-left p-2 text-tactical-muted">CVSS</th>
+            <th class="text-left p-2 text-tactical-muted">Title</th>
+            <th class="text-left p-2 text-tactical-muted">Status</th>
+            <th class="text-left p-2 text-tactical-muted">Discovered</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="vuln in analytics.data.vulnerabilities?.top_vulnerabilities || []" :key="vuln.cve_id">
+            <tr class="border-b border-tactical-border hover:bg-tactical-surface">
+              <td class="p-2 font-mono" x-text="vuln.cve_id"></td>
+              <td class="p-2">
+                <span class="px-2 py-1 rounded text-xs"
+                  :class="{
+                    'bg-severity-critical': vuln.severity === 'critical',
+                    'bg-severity-high': vuln.severity === 'high',
+                    'bg-severity-medium': vuln.severity === 'medium',
+                    'bg-severity-low': vuln.severity === 'low'
+                  }"
+                  x-text="vuln.severity"></span>
+              </td>
+              <td class="p-2 font-mono font-bold"
+                :class="{
+                  'text-severity-critical': vuln.cvss >= 9,
+                  'text-severity-high': vuln.cvss >= 7 && vuln.cvss < 9,
+                  'text-severity-medium': vuln.cvss >= 4 && vuln.cvss < 7
+                }"
+                x-text="vuln.cvss"></td>
+              <td class="p-2" x-text="vuln.title"></td>
+              <td class="p-2">
+                <span class="px-2 py-1 rounded text-xs"
+                  :class="vuln.status === 'exploited' ? 'bg-severity-critical' : 'bg-severity-medium'"
+                  x-text="vuln.status"></span>
+              </td>
+              <td class="p-2 text-tactical-muted" x-text="vuln.discovered"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Security Categories Breakdown -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <template x-for="(score, category) in analytics.data.posture?.categories || {}" :key="category">
+      <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+        <h4 class="text-sm font-bold mb-2 capitalize" x-text="category.replace('_', ' ')"></h4>
+        <div class="w-full bg-tactical-bg rounded-full h-2 mb-2">
+          <div class="h-2 rounded-full transition-all"
+            :class="{
+              'bg-military-green': score >= 80,
+              'bg-military-amber': score >= 60 && score < 80,
+              'bg-severity-critical': score < 60
+            }"
+            :style="'width: ' + score + '%'"></div>
+        </div>
+        <div class="text-right">
+          <span class="font-mono font-bold" x-text="score"></span>
+          <span class="text-tactical-muted">/100</span>
+        </div>
+      </div>
+    </template>
+  </div>
+
+</div>
+
+<script>
+// Initialize charts
+document.addEventListener('alpine:init', () => {
+  // Vulnerability Trends Line Chart
+  new Chart(document.getElementById('vulnTrendsChart'), {
+    type: 'line',
+    data: {
+      labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
+      datasets: [
+        {
+          label: 'Critical',
+          data: [2, 3, 2, 4, 3, 2, 3],
+          borderColor: '#ff0055',
+          backgroundColor: 'rgba(255, 0, 85, 0.1)',
+          fill: true
+        },
+        {
+          label: 'High',
+          data: [5, 6, 8, 7, 9, 8, 10],
+          borderColor: '#ff6b35',
+          backgroundColor: 'rgba(255, 107, 53, 0.1)',
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  // Tool Effectiveness Bar Chart
+  new Chart(document.getElementById('toolEffectivenessChart'), {
+    type: 'bar',
+    data: {
+      labels: ['nmap', 'sqlmap', 'metasploit', 'gobuster', 'nikto', 'nuclei'],
+      datasets: [{
+        label: 'Success Rate (%)',
+        data: [98, 76, 82, 91, 85, 88],
+        backgroundColor: ['#06ffa5', '#06ffa5', '#ffd23f', '#06ffa5', '#ffd23f', '#06ffa5']
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, max: 100 }
+      }
+    }
+  });
+
+  // Initialize MITRE Heatmap (Wave 4 component)
+  if (window.MitreHeatmap) {
+    const heatmap = new MitreHeatmap('mitreHeatmap', {
+      width: 1200,
+      height: 600
+    });
+    // Load data from store
+    Alpine.effect(() => {
+      const mitre = Alpine.store('analyticsDashboard').data.mitre;
+      if (mitre) {
+        heatmap.loadData(mitre);
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,329 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Dashboard - Red Team C2{% endblock %}
+
+{% block page_header %}
+  <div class="d-flex justify-content-between align-items-center">
+    <h1 class="h2">
+      <i class="bi bi-house-door"></i> Dashboard
+    </h1>
+    <div class="btn-group">
+      <button class="btn btn-outline-success btn-sm" @click="$store.metrics.fetch()">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+      <button class="btn btn-outline-info btn-sm" @click="$store.notifications.info('Dashboard refreshed')">
+        <i class="bi bi-bell"></i> Test Notification
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <!-- Hero Section with Reactive Data -->
+  <div class="p-5 mb-4 rounded-3" style="background: linear-gradient(135deg, rgba(0,255,0,0.1) 0%, rgba(0,255,255,0.1) 100%); border: 1px solid rgba(0,255,0,0.3);">
+    <div class="container-fluid py-4">
+      <h1 class="display-5 fw-bold" style="font-family: 'Orbitron', sans-serif;">
+        Red Team Command Center
+      </h1>
+      <p class="col-md-8 fs-5">
+        AI-powered autonomous red team operations with fractal parallel execution.
+        <span x-data class="text-success">
+          <strong x-text="$store.metrics.activeExercises"></strong> exercises active,
+          <strong x-text="$store.agents.healthy"></strong> AI agents online.
+        </span>
+      </p>
+      <div class="d-flex gap-2">
+        <a href="/exercises" class="btn btn-success btn-lg">
+          <i class="bi bi-shield-check"></i> Launch Exercise
+        </a>
+        <a href="/ai/dashboard" class="btn btn-outline-info btn-lg">
+          <i class="bi bi-robot"></i> AI Agents
+        </a>
+        <a href="/chains/builder" class="btn btn-outline-warning btn-lg">
+          <i class="bi bi-link-45deg"></i> Build Chain
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enhanced Reactive Metric Cards -->
+  <div class="row g-4 mb-4" x-data>
+    <div class="col-md-3">
+      <div class="metric-card-enhanced" x-data="AlpineComponents.metricCard($store.metrics.activeExercises)">
+        <i class="metric-icon bi bi-shield-check text-success" style="font-size: 2.5rem;"></i>
+        <div class="metric-label text-light mt-3">Active Exercises</div>
+        <div class="metric-value text-success" style="font-size: 2.5rem; font-weight: bold;">
+          <span x-text="$store.metrics.activeExercises"></span>
+        </div>
+        <small class="text-muted">
+          <span x-text="$store.execution.completedToday"></span> completed today
+        </small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="metric-card-enhanced" x-data="AlpineComponents.metricCard($store.metrics.systemHealth, '%')">
+        <i class="metric-icon bi bi-heart-pulse text-danger" style="font-size: 2.5rem;"></i>
+        <div class="metric-label text-light mt-3">System Health</div>
+        <div class="metric-value text-success" style="font-size: 2.5rem; font-weight: bold;">
+          <span x-text="$store.metrics.systemHealth"></span>%
+        </div>
+        <small class="text-muted">
+          All systems operational
+        </small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="metric-card-enhanced" x-data="AlpineComponents.metricCard($store.agents.healthy)">
+        <i class="metric-icon bi bi-robot text-info" style="font-size: 2.5rem;"></i>
+        <div class="metric-label text-light mt-3">AI Agents</div>
+        <div class="metric-value text-success" style="font-size: 2.5rem; font-weight: bold;">
+          <span x-text="$store.agents.healthy"></span>/<span x-text="$store.agents.healthy + $store.agents.unhealthy"></span>
+        </div>
+        <small class="text-muted">
+          Avg response: <span x-text="Math.round($store.agents.avgResponseTime)"></span>ms
+        </small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="metric-card-enhanced" x-data="AlpineComponents.metricCard($store.metrics.runningContainers)">
+        <i class="metric-icon bi bi-boxes text-warning" style="font-size: 2.5rem;"></i>
+        <div class="metric-label text-light mt-3">Containers</div>
+        <div class="metric-value text-success" style="font-size: 2.5rem; font-weight: bold;">
+          <span x-text="$store.metrics.runningContainers"></span>
+        </div>
+        <small class="text-muted">
+          Uptime: <span x-text="$store.metrics.uptime"></span>
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Section -->
+  <div class="row g-4 mb-4">
+    <!-- Activity Timeline Chart -->
+    <div class="col-md-8">
+      <div class="card bg-dark border-success">
+        <div class="card-header bg-dark border-success d-flex justify-content-between align-items-center">
+          <div>
+            <i class="bi bi-graph-up text-success"></i>
+            <strong class="text-success">Exercise Activity Timeline</strong>
+          </div>
+          <button class="btn btn-sm btn-outline-success" onclick="refreshActivityChart()">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+        <div class="card-body">
+          <div style="height: 300px;">
+            <canvas id="activityChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Rate Gauge -->
+    <div class="col-md-4">
+      <div class="card bg-dark border-success">
+        <div class="card-header bg-dark border-success">
+          <i class="bi bi-pie-chart-fill text-success"></i>
+          <strong class="text-success">Attack Success Rate</strong>
+        </div>
+        <div class="card-body">
+          <div style="height: 300px;">
+            <canvas id="successGauge"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Agents Status -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card bg-dark border-info">
+        <div class="card-header bg-dark border-info">
+          <i class="bi bi-robot text-info"></i>
+          <strong class="text-info">AI Agent Status</strong>
+        </div>
+        <div class="card-body">
+          <div class="row g-3" x-data>
+            <template x-for="agent in $store.agents.agents" :key="agent.type">
+              <div class="col-md-4">
+                <div class="card bg-dark border-secondary" x-data="AlpineComponents.agentStatusCard()" x-init="agent = $el.__x.$data">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                      <i :class="`bi ${agent.is_healthy ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-danger'}`" style="font-size: 2rem;"></i>
+                      <div class="flex-grow-1">
+                        <h6 class="mb-1 text-capitalize" x-text="agent.type.replace('_', ' ')"></h6>
+                        <div class="d-flex gap-3">
+                          <small :class="agent.is_healthy ? 'text-success' : 'text-danger'">
+                            <i class="bi bi-activity"></i>
+                            <span x-text="Math.round(agent.uptime_percentage)"></span>% uptime
+                          </small>
+                          <small class="text-info">
+                            <i class="bi bi-clock"></i>
+                            <span x-text="Math.round(agent.avg_response_time)"></span>ms
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Placeholder if no agents -->
+            <template x-if="$store.agents.agents.length === 0">
+              <div class="col-12 text-center text-muted py-4">
+                <i class="bi bi-robot" style="font-size: 3rem;"></i>
+                <p class="mt-2">No AI agents configured. Enable agents in settings.</p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Executions -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card bg-dark border-primary">
+        <div class="card-header bg-dark border-primary">
+          <i class="bi bi-diagram-3 text-primary"></i>
+          <strong class="text-primary">Active Fractal Executions</strong>
+        </div>
+        <div class="card-body">
+          <div x-data>
+            <template x-if="$store.execution.activeExecutions.length > 0">
+              <div class="table-responsive">
+                <table class="table table-dark table-hover">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Progress</th>
+                      <th>Duration</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template x-for="exec in $store.execution.activeExecutions" :key="exec.id">
+                      <tr>
+                        <td><code class="text-info" x-text="exec.id"></code></td>
+                        <td><span class="badge bg-secondary" x-text="exec.type"></span></td>
+                        <td>
+                          <span class="badge" :class="exec.status === 'running' ? 'bg-primary' : 'bg-warning'" x-text="exec.status"></span>
+                        </td>
+                        <td>
+                          <div class="progress" style="height: 20px;">
+                            <div class="progress-bar bg-success" :style="`width: ${exec.progress}%`" x-text="`${exec.progress}%`"></div>
+                          </div>
+                        </td>
+                        <td><span x-text="exec.duration + 's'"></span></td>
+                        <td>
+                          <a :href="`/execution/details/${exec.id}`" class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-eye"></i> View
+                          </a>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+
+            <template x-if="$store.execution.activeExecutions.length === 0">
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-diagram-3" style="font-size: 3rem;"></i>
+                <p class="mt-2">No active executions. Launch an exercise to begin.</p>
+                <a href="/exercises" class="btn btn-success">
+                  <i class="bi bi-shield-check"></i> Launch Exercise
+                </a>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity Timeline -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <h5 class="mb-3 text-light">
+        <i class="bi bi-clock-history"></i> Recent Activity
+      </h5>
+      <ul class="timeline">
+        <li class="timeline-item">
+          <div class="timeline-icon bg-success"><i class="bi bi-check-circle"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">Exercise ex-20251021-001 completed</h6>
+            <small class="text-muted">2 minutes ago</small>
+            <p class="mb-1">Web Application Assessment completed with 15 findings (3 critical)</p>
+          </div>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-icon bg-info"><i class="bi bi-robot"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">AI agent consensus decision</h6>
+            <small class="text-muted">5 minutes ago</small>
+            <p class="mb-1">Agents recommended SQLi exploitation for target vulnerability</p>
+          </div>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-icon bg-primary"><i class="bi bi-diagram-3"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">Fractal execution started</h6>
+            <small class="text-muted">12 minutes ago</small>
+            <p class="mb-1">5-layer parallel execution initiated for AD reconnaissance chain</p>
+          </div>
+        </li>
+        <li class="timeline-item">
+          <div class="timeline-icon bg-warning"><i class="bi bi-exclamation-triangle"></i></div>
+          <div class="timeline-content">
+            <h6 class="mb-1">Vulnerability found</h6>
+            <small class="text-muted">18 minutes ago</small>
+            <p class="mb-1">Critical: SQL Injection detected at /api/users endpoint</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Initialize dashboard charts
+  window.addEventListener('DOMContentLoaded', function() {
+    // Create activity timeline chart
+    createTimelineChart('activityChart', {
+      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      values: [3, 5, 2, 8, 6, 4, 7]
+    });
+
+    // Create success rate gauge using enhanced chart
+    const successChart = ChartEnhancements.createRadialGaugeChart('successGauge', 85, {
+      label: 'Success Rate',
+      maxValue: 100
+    });
+
+    // Function to refresh activity chart with latest data
+    window.refreshActivityChart = async function() {
+      try {
+        const response = await fetch('/api/metrics/activity');
+        const data = await response.json();
+
+        // Update chart would go here
+        Alpine.store('notifications').success('Chart refreshed');
+      } catch (err) {
+        console.error('Error refreshing chart:', err);
+        Alpine.store('notifications').error('Failed to refresh chart');
+      }
+    };
+  });
+</script>
+{% endblock %}

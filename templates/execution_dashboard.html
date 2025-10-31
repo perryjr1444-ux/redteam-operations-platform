@@ -1,0 +1,713 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Execution Monitor Dashboard - Red Team C2{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js for performance charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+<!-- Dashboard Components - Shared across all dashboards -->
+<script src="/static/js/dashboard-components.js"></script>
+
+<style>
+  /* Dashboard Grid Layout */
+  .dashboard-grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(12, 1fr);
+  }
+
+  .grid-span-12 { grid-column: span 12; }
+  .grid-span-8 { grid-column: span 8; }
+  .grid-span-6 { grid-column: span 6; }
+  .grid-span-4 { grid-column: span 4; }
+  .grid-span-3 { grid-column: span 3; }
+
+  @media (max-width: 768px) {
+    .grid-span-8, .grid-span-6, .grid-span-4, .grid-span-3 {
+      grid-column: span 12;
+    }
+  }
+
+  /* Status Badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .status-pending { background: rgba(108, 117, 125, 0.2); color: #6c757d; }
+  .status-running {
+    background: rgba(13, 202, 240, 0.2);
+    color: #0dcaf0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .status-completed { background: rgba(25, 135, 84, 0.2); color: #198754; }
+  .status-failed { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+  .status-cancelled { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .status-indicator.pending { background: #6c757d; }
+  .status-indicator.running {
+    background: #0dcaf0;
+    box-shadow: 0 0 8px #0dcaf0;
+  }
+  .status-indicator.completed { background: #198754; }
+  .status-indicator.failed { background: #dc3545; }
+  .status-indicator.cancelled { background: #ffc107; }
+
+  /* Execution Cards */
+  .execution-card {
+    background: linear-gradient(135deg, rgba(13, 27, 42, 0.95) 0%, rgba(27, 38, 59, 0.95) 100%);
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .execution-card:hover {
+    border-color: rgba(0, 255, 136, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 255, 136, 0.2);
+  }
+
+  .execution-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.1), transparent);
+    transition: left 0.5s;
+  }
+
+  .execution-card:hover::before {
+    left: 100%;
+  }
+
+  /* Metric Cards */
+  .metric-card {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.05) 0%, rgba(0, 255, 255, 0.05) 100%);
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 255, 136, 0.3);
+    border-color: rgba(0, 255, 136, 0.5);
+  }
+
+  .metric-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 1.5rem;
+  }
+
+  .metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+    margin: 0.5rem 0;
+  }
+
+  .metric-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding: 1rem 0;
+  }
+
+  .timeline-item {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+    z-index: 1;
+  }
+
+  .timeline-marker.running {
+    background: #0dcaf0;
+    box-shadow: 0 0 12px #0dcaf0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .timeline-marker.completed { background: #198754; }
+  .timeline-marker.failed { background: #dc3545; }
+
+  .timeline-content {
+    flex: 1;
+    padding: 1rem;
+    background: rgba(13, 27, 42, 0.5);
+    border-left: 2px solid rgba(0, 255, 136, 0.3);
+    border-radius: 8px;
+  }
+
+  .timeline-time {
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Progress Bar */
+  .progress-bar-custom {
+    height: 6px;
+    background: rgba(0, 255, 136, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #0dcaf0, #00ff88);
+    transition: width 0.5s ease;
+    border-radius: 3px;
+  }
+
+  /* Log Viewer */
+  .log-viewer {
+    background: #0a0e1a;
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    height: 400px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .log-viewer::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .log-viewer::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .log-viewer::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 136, 0.3);
+    border-radius: 4px;
+  }
+
+  .log-entry {
+    padding: 0.25rem 0;
+    border-left: 2px solid transparent;
+    padding-left: 0.5rem;
+  }
+
+  .log-entry.info { color: #0dcaf0; border-left-color: #0dcaf0; }
+  .log-entry.success { color: #00ff88; border-left-color: #00ff88; }
+  .log-entry.warning { color: #ffc107; border-left-color: #ffc107; }
+  .log-entry.error { color: #dc3545; border-left-color: #dc3545; }
+
+  .log-timestamp {
+    color: #6c757d;
+    margin-right: 0.5rem;
+  }
+
+  /* Resource Utilization */
+  .resource-bar {
+    margin-bottom: 1rem;
+  }
+
+  .resource-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .resource-progress {
+    height: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .resource-progress-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+    border-radius: 4px;
+  }
+
+  .resource-progress-fill.low { background: #198754; }
+  .resource-progress-fill.medium { background: #ffc107; }
+  .resource-progress-fill.high { background: #dc3545; }
+
+  /* Action Buttons */
+  .action-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: 1px solid;
+    background: transparent;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .action-btn.pause {
+    border-color: #ffc107;
+    color: #ffc107;
+  }
+
+  .action-btn.pause:hover {
+    background: rgba(255, 193, 7, 0.1);
+  }
+
+  .action-btn.resume {
+    border-color: #198754;
+    color: #198754;
+  }
+
+  .action-btn.resume:hover {
+    background: rgba(25, 135, 84, 0.1);
+  }
+
+  .action-btn.cancel {
+    border-color: #dc3545;
+    color: #dc3545;
+  }
+
+  .action-btn.cancel:hover {
+    background: rgba(220, 53, 69, 0.1);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #6c757d;
+  }
+
+  .empty-state i {
+    font-size: 4rem;
+    opacity: 0.3;
+    margin-bottom: 1rem;
+  }
+
+  /* Loading Spinner */
+  .loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(0, 255, 136, 0.3);
+    border-radius: 50%;
+    border-top-color: #00ff88;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Chart Container */
+  .chart-container {
+    position: relative;
+    height: 300px;
+    padding: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="d-flex justify-content-between align-items-center">
+  <h1 class="h2">
+    <i class="bi bi-diagram-3"></i> Execution Monitor Dashboard
+  </h1>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-success btn-sm" id="refreshBtn">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+    <a href="/execution/visualizer" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-diagram-3-fill"></i> Tree Visualizer
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div x-data="executionDashboard()" x-init="init()" x-cloak>
+
+  <!-- Performance Metrics Row -->
+  <div class="dashboard-grid mb-4">
+    <!-- Active Executions -->
+    <div class="grid-span-3">
+      <div class="metric-card">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <div class="metric-label">Active Executions</div>
+            <div class="metric-value" x-text="metrics.activeExecutions"></div>
+          </div>
+          <div class="metric-icon" style="background: rgba(13, 202, 240, 0.2); color: #0dcaf0;">
+            <i class="bi bi-play-circle"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Completed Today -->
+    <div class="grid-span-3">
+      <div class="metric-card">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <div class="metric-label">Completed Today</div>
+            <div class="metric-value" x-text="metrics.completedToday"></div>
+          </div>
+          <div class="metric-icon" style="background: rgba(25, 135, 84, 0.2); color: #198754;">
+            <i class="bi bi-check-circle"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Rate -->
+    <div class="grid-span-3">
+      <div class="metric-card">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-value">
+              <span x-text="metrics.successRate"></span><span style="font-size: 1.2rem;">%</span>
+            </div>
+          </div>
+          <div class="metric-icon" style="background: rgba(0, 255, 136, 0.2); color: #00ff88;">
+            <i class="bi bi-graph-up"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Avg Duration -->
+    <div class="grid-span-3">
+      <div class="metric-card">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <div class="metric-label">Avg Duration</div>
+            <div class="metric-value" style="font-size: 1.5rem;">
+              <span x-text="formatDuration(metrics.avgDuration)"></span>
+            </div>
+          </div>
+          <div class="metric-icon" style="background: rgba(255, 193, 7, 0.2); color: #ffc107;">
+            <i class="bi bi-clock-history"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Grid -->
+  <div class="dashboard-grid">
+
+    <!-- Active Executions List -->
+    <div class="grid-span-8">
+      <div class="execution-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">
+            <i class="bi bi-list-task"></i> Active Executions
+          </h5>
+          <span class="badge bg-primary" x-text="activeExecutions.length + ' running'"></span>
+        </div>
+
+        <div style="max-height: 600px; overflow-y: auto;">
+          <!-- Execution Items -->
+          <template x-if="activeExecutions.length === 0">
+            <div class="empty-state">
+              <i class="bi bi-inbox"></i>
+              <p class="mb-0">No active executions</p>
+              <small>Executions will appear here when started</small>
+            </div>
+          </template>
+
+          <template x-for="execution in activeExecutions" :key="execution.id">
+            <div class="mb-3 p-3" style="background: rgba(0, 0, 0, 0.2); border-radius: 8px; border-left: 3px solid #0dcaf0;">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="flex-grow-1">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="status-indicator" :class="execution.status"></span>
+                    <strong x-text="execution.type"></strong>
+                    <span class="badge" :class="'status-' + execution.status" x-text="execution.status"></span>
+                  </div>
+                  <code class="text-muted" style="font-size: 0.75rem;" x-text="execution.id"></code>
+                </div>
+
+                <div class="d-flex gap-1">
+                  <button class="action-btn pause" @click="pauseExecution(execution.id)"
+                          x-show="execution.status === 'running'" title="Pause">
+                    <i class="bi bi-pause-fill"></i>
+                  </button>
+                  <button class="action-btn resume" @click="resumeExecution(execution.id)"
+                          x-show="execution.status === 'paused'" title="Resume">
+                    <i class="bi bi-play-fill"></i>
+                  </button>
+                  <button class="action-btn cancel" @click="cancelExecution(execution.id)" title="Cancel">
+                    <i class="bi bi-x-circle"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-info" @click="selectExecution(execution)" title="Details">
+                    <i class="bi bi-info-circle"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Progress Bar -->
+              <div class="progress-bar-custom">
+                <div class="progress-bar-fill" :style="'width: ' + execution.progress + '%'"></div>
+              </div>
+              <div class="d-flex justify-content-between mt-1">
+                <small class="text-muted">
+                  <i class="bi bi-clock"></i>
+                  <span x-text="formatDuration(execution.duration)"></span> elapsed
+                </small>
+                <small class="text-info" x-text="execution.progress + '%'"></small>
+              </div>
+
+              <!-- Level and Node Count -->
+              <div class="d-flex gap-3 mt-2">
+                <small class="text-muted">
+                  <i class="bi bi-layers"></i> Level: <span x-text="execution.level || 'N/A'"></span>
+                </small>
+                <small class="text-muted">
+                  <i class="bi bi-diagram-3"></i> Nodes: <span x-text="execution.nodeCount || 0"></span>
+                </small>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resource Utilization & Timeline -->
+    <div class="grid-span-4">
+      <!-- Resource Utilization -->
+      <div class="execution-card mb-3">
+        <h5 class="mb-3">
+          <i class="bi bi-speedometer2"></i> Resource Utilization
+        </h5>
+
+        <div class="resource-bar">
+          <div class="resource-label">
+            <span>CPU</span>
+            <span x-text="resources.cpu + '%'"></span>
+          </div>
+          <div class="resource-progress">
+            <div class="resource-progress-fill"
+                 :class="resources.cpu > 80 ? 'high' : resources.cpu > 50 ? 'medium' : 'low'"
+                 :style="'width: ' + resources.cpu + '%'"></div>
+          </div>
+        </div>
+
+        <div class="resource-bar">
+          <div class="resource-label">
+            <span>Memory</span>
+            <span x-text="resources.memory + '%'"></span>
+          </div>
+          <div class="resource-progress">
+            <div class="resource-progress-fill"
+                 :class="resources.memory > 80 ? 'high' : resources.memory > 50 ? 'medium' : 'low'"
+                 :style="'width: ' + resources.memory + '%'"></div>
+          </div>
+        </div>
+
+        <div class="resource-bar">
+          <div class="resource-label">
+            <span>Network</span>
+            <span x-text="resources.network + '%'"></span>
+          </div>
+          <div class="resource-progress">
+            <div class="resource-progress-fill"
+                 :class="resources.network > 80 ? 'high' : resources.network > 50 ? 'medium' : 'low'"
+                 :style="'width: ' + resources.network + '%'"></div>
+          </div>
+        </div>
+
+        <div class="resource-bar">
+          <div class="resource-label">
+            <span>Containers</span>
+            <span x-text="resources.containers + '/' + resources.maxContainers"></span>
+          </div>
+          <div class="resource-progress">
+            <div class="resource-progress-fill low"
+                 :style="'width: ' + (resources.containers / resources.maxContainers * 100) + '%'"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Execution Timeline -->
+      <div class="execution-card">
+        <h5 class="mb-3">
+          <i class="bi bi-clock-history"></i> Recent Activity
+        </h5>
+
+        <div class="timeline" style="max-height: 300px; overflow-y: auto;">
+          <template x-if="timeline.length === 0">
+            <div class="text-center text-muted py-3">
+              <small>No recent activity</small>
+            </div>
+          </template>
+
+          <template x-for="event in timeline" :key="event.id">
+            <div class="timeline-item">
+              <div class="timeline-marker" :class="event.status"></div>
+              <div class="timeline-content">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                  <strong x-text="event.type"></strong>
+                  <span class="timeline-time" x-text="formatTime(event.timestamp)"></span>
+                </div>
+                <div class="text-muted" style="font-size: 0.875rem;" x-text="event.message"></div>
+                <div class="mt-1">
+                  <span class="status-badge" :class="'status-' + event.status" x-text="event.status"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Charts -->
+    <div class="grid-span-6">
+      <div class="execution-card">
+        <h5 class="mb-3">
+          <i class="bi bi-graph-up"></i> Execution Performance
+        </h5>
+        <div class="chart-container">
+          <canvas id="performanceChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Distribution -->
+    <div class="grid-span-6">
+      <div class="execution-card">
+        <h5 class="mb-3">
+          <i class="bi bi-pie-chart"></i> Status Distribution
+        </h5>
+        <div class="chart-container">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execution Logs -->
+    <div class="grid-span-12">
+      <div class="execution-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">
+            <i class="bi bi-terminal"></i> Execution Logs
+          </h5>
+          <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" x-model="logFilter"
+                    style="width: auto; background: rgba(0,0,0,0.3); border-color: rgba(0,255,136,0.2); color: white;">
+              <option value="all">All Logs</option>
+              <option value="info">Info</option>
+              <option value="success">Success</option>
+              <option value="warning">Warning</option>
+              <option value="error">Error</option>
+            </select>
+            <button class="btn btn-sm btn-outline-danger" @click="clearLogs()">
+              <i class="bi bi-trash"></i> Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="log-viewer" id="logViewer">
+          <template x-if="filteredLogs.length === 0">
+            <div class="text-muted text-center py-5">
+              <i class="bi bi-file-text"></i> No logs available
+            </div>
+          </template>
+
+          <template x-for="log in filteredLogs" :key="log.id">
+            <div class="log-entry" :class="log.level">
+              <span class="log-timestamp" x-text="formatTime(log.timestamp)"></span>
+              <span x-text="log.message"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebSocket Status Indicator -->
+  <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+    <div class="card"
+         :class="wsConnected ? 'border-success' : 'border-danger'"
+         style="background: rgba(13, 27, 42, 0.95); min-width: 200px;">
+      <div class="card-body p-2">
+        <small class="d-flex align-items-center gap-2">
+          <span class="status-indicator" :class="wsConnected ? 'running' : 'failed'"></span>
+          <span x-text="wsConnected ? 'Connected' : 'Disconnected'"></span>
+          <span x-show="isLoading" class="loading-spinner"></span>
+        </small>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize execution dashboard when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[Execution Dashboard] Initializing...');
+
+  // Start auto-refresh for Alpine stores
+  if (Alpine && Alpine.store) {
+    Alpine.store('execution').startAutoRefresh(3000);
+    Alpine.store('metrics').startAutoRefresh(5000);
+  }
+});
+</script>
+{% endblock %}

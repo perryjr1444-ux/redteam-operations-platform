@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: redteam-app
+    ports:
+      - "5172:5172"
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - DATABASE_URL=sqlite:///./db/redteam.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - RATE_LIMIT_PER_MINUTE=60
+      - WORKERS=4
+    volumes:
+      - ./db:/app/db
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5172/api/liveness')"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
+    networks:
+      - redteam-network
+
+  # Optional: Add PostgreSQL for production
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: redteam-db
+  #   environment:
+  #     POSTGRES_DB: redteam
+  #     POSTGRES_USER: redteam
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - redteam-network
+  #   restart: unless-stopped
+
+  # Optional: Add reverse proxy
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: redteam-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - redteam-network
+  #   restart: unless-stopped
+
+networks:
+  redteam-network:
+    driver: bridge
+
+volumes:
+  postgres-data:

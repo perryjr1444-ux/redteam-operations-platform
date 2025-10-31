@@ -1,0 +1,290 @@
+{% extends "base_enhanced.html" %}
+
+{% block page_header %}
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h1 class="h2 mb-0">Metrics Analytics Dashboard</h1>
+      <p class="text-muted small mb-0">Real-time system performance and operational intelligence</p>
+    </div>
+    <div class="d-flex gap-2" x-data="metricsDashboard" x-init="init()">
+      <button @click="exportData('csv')" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+      </button>
+      <button @click="exportData('json')" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-file-earmark-code"></i> Export JSON
+      </button>
+      <button @click="refreshAllData()" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div x-data="metricsDashboard" x-init="init()" class="metrics-dashboard">
+
+  <!-- Time Range Selector -->
+  <div class="card bg-dark text-white mb-4">
+    <div class="card-body py-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex gap-3">
+          <div class="text-muted small">
+            <i class="bi bi-clock"></i> Time Range:
+          </div>
+          <div class="btn-group btn-group-sm" role="group">
+            <template x-for="range in timeRanges" :key="range.value">
+              <button
+                type="button"
+                class="btn"
+                :class="selectedTimeRange === range.value ? 'btn-primary' : 'btn-outline-secondary'"
+                @click="setTimeRange(range.value)"
+                x-text="range.label">
+              </button>
+            </template>
+          </div>
+        </div>
+        <div class="text-muted small">
+          <i class="bi bi-arrow-repeat"></i>
+          Last updated: <span x-text="lastUpdate"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Overview Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card bg-dark text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h6 class="text-muted mb-1 fw-normal">Active Exercises</h6>
+              <h2 class="mb-0 text-primary" x-text="metrics.activeExercises">0</h2>
+            </div>
+            <div class="bg-primary bg-opacity-25 p-2 rounded">
+              <i class="bi bi-shield-check fs-4 text-primary"></i>
+            </div>
+          </div>
+          <div class="d-flex align-items-center text-success small">
+            <i class="bi bi-arrow-up"></i>
+            <span x-text="metrics.exerciseChange">+0</span>
+            <span class="text-muted ms-1">from previous period</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card bg-dark text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h6 class="text-muted mb-1 fw-normal">System Health</h6>
+              <h2 class="mb-0" :class="getHealthColor(metrics.systemHealth)" x-text="metrics.systemHealth + '%'">0%</h2>
+            </div>
+            <div class="p-2 rounded" :class="'bg-' + (metrics.systemHealth > 80 ? 'success' : metrics.systemHealth > 50 ? 'warning' : 'danger') + ' bg-opacity-25'">
+              <i class="bi bi-heart-pulse fs-4" :class="'text-' + (metrics.systemHealth > 80 ? 'success' : metrics.systemHealth > 50 ? 'warning' : 'danger')"></i>
+            </div>
+          </div>
+          <div class="progress" style="height: 4px;">
+            <div class="progress-bar" :class="'bg-' + (metrics.systemHealth > 80 ? 'success' : metrics.systemHealth > 50 ? 'warning' : 'danger')" :style="'width: ' + metrics.systemHealth + '%'"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card bg-dark text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h6 class="text-muted mb-1 fw-normal">Running Containers</h6>
+              <h2 class="mb-0 text-info" x-text="metrics.runningContainers">0</h2>
+            </div>
+            <div class="bg-info bg-opacity-25 p-2 rounded">
+              <i class="bi bi-box fs-4 text-info"></i>
+            </div>
+          </div>
+          <div class="d-flex align-items-center text-info small">
+            <i class="bi bi-cpu"></i>
+            <span class="ms-1">CPU: <span x-text="metrics.cpuUsage + '%'">0%</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card bg-dark text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h6 class="text-muted mb-1 fw-normal">Success Rate</h6>
+              <h2 class="mb-0 text-success" x-text="metrics.successRate + '%'">0%</h2>
+            </div>
+            <div class="bg-success bg-opacity-25 p-2 rounded">
+              <i class="bi bi-check-circle fs-4 text-success"></i>
+            </div>
+          </div>
+          <div class="text-muted small">
+            <span x-text="metrics.completedOps">0</span> of <span x-text="metrics.totalOps">0</span> operations
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 1: System Performance -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-8">
+      <div class="card bg-dark text-white">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-graph-up"></i> System Performance Trends</h5>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="chartType = 'cpu'" :class="chartType === 'cpu' ? 'active' : ''">CPU</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="chartType = 'memory'" :class="chartType === 'memory' ? 'active' : ''">Memory</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="chartType = 'containers'" :class="chartType === 'containers' ? 'active' : ''">Containers</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <canvas id="performanceChart" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card bg-dark text-white">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Attack Success Rate</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="successRateChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2: Tool Usage & Operations -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="card bg-dark text-white">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-tools"></i> Tool Usage Statistics</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="toolUsageChart" height="100"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card bg-dark text-white">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Operation Activity</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="activityChart" height="100"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row 3: Resource Consumption -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-12">
+      <div class="card bg-dark text-white">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-speedometer2"></i> Resource Consumption Timeline</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="resourceChart" height="60"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Container Utilization Table -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-12">
+      <div class="card bg-dark text-white">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="bi bi-table"></i> Container Utilization Details</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-dark table-hover">
+              <thead>
+                <tr>
+                  <th>Container ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>CPU %</th>
+                  <th>Memory</th>
+                  <th>Uptime</th>
+                  <th>Operations</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="container in containerStats" :key="container.id">
+                  <tr>
+                    <td><code x-text="container.id.substring(0, 12)"></code></td>
+                    <td><span class="badge bg-secondary" x-text="container.type"></span></td>
+                    <td>
+                      <span class="badge" :class="container.status === 'running' ? 'bg-success' : container.status === 'stopped' ? 'bg-danger' : 'bg-warning'" x-text="container.status"></span>
+                    </td>
+                    <td x-text="container.cpu + '%'"></td>
+                    <td x-text="container.memory"></td>
+                    <td x-text="container.uptime"></td>
+                    <td x-text="container.operations"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity Log -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-12">
+      <div class="card bg-dark text-white">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Activity</h5>
+          <button @click="clearActivityLog()" class="btn btn-sm btn-outline-danger">Clear Log</button>
+        </div>
+        <div class="card-body">
+          <div class="activity-log" style="max-height: 300px; overflow-y: auto;">
+            <template x-for="(activity, index) in activityLog" :key="index">
+              <div class="activity-item d-flex align-items-start mb-2 pb-2" :class="index < activityLog.length - 1 ? 'border-bottom border-secondary' : ''">
+                <div class="activity-icon me-3">
+                  <i class="bi" :class="getActivityIcon(activity.type)" :style="'color: ' + getActivityColor(activity.type)"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      <strong x-text="activity.message"></strong>
+                      <div class="text-muted small" x-show="activity.details" x-text="activity.details"></div>
+                    </div>
+                    <small class="text-muted" x-text="formatTime(activity.timestamp)"></small>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div x-show="activityLog.length === 0" class="text-center text-muted py-4">
+              <i class="bi bi-inbox fs-1"></i>
+              <p class="mb-0">No recent activity</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Dashboard Components - Shared across all dashboards -->
+<script src="/static/js/dashboard-components.js"></script>
+{% endblock %}

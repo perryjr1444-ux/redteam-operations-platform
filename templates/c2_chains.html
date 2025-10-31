@@ -1,0 +1,132 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Attack Chains - Red Team C2{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-military-green mb-2">ATTACK CHAINS</h1>
+            <p class="text-tactical-muted">Build and execute automated attack workflows</p>
+        </div>
+        <button class="px-4 py-2 bg-military-green hover:bg-military-green-dark text-tactical-bg rounded font-semibold transition-colors flex items-center gap-2">
+            <i class="bi bi-plus-circle"></i>
+            New Chain
+        </button>
+    </div>
+</div>
+
+<!-- Attack Chain Builder Island -->
+<div id="attack-chain-island" data-island="attackChain"></div>
+
+<!-- Predefined Chains -->
+<div class="mt-6">
+    <h2 class="text-xl font-display font-semibold text-tactical-text mb-4">PREDEFINED WORKFLOWS</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Web Recon Chain -->
+        <div class="bg-tactical-card rounded-lg border border-tactical-border p-4 hover:border-military-green transition-colors cursor-pointer">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                    <h3 class="font-semibold text-tactical-text mb-1">Web Application Recon</h3>
+                    <p class="text-sm text-tactical-muted">Comprehensive web app scanning</p>
+                </div>
+                <span class="px-2 py-1 text-xs bg-military-green bg-opacity-20 text-military-green rounded">4 STEPS</span>
+            </div>
+
+            <div class="space-y-2 mb-3">
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-1-circle text-military-green"></i>
+                    <span>nmap port scan</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-2-circle text-military-green"></i>
+                    <span>nikto web scan</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-3-circle text-military-green"></i>
+                    <span>gobuster directory bruteforce</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-4-circle text-military-green"></i>
+                    <span>sqlmap injection test</span>
+                </div>
+            </div>
+
+            <button class="w-full px-3 py-2 bg-military-green hover:bg-military-green-dark text-tactical-bg rounded font-semibold transition-colors text-sm">
+                Execute Chain
+            </button>
+        </div>
+
+        <!-- Network Discovery Chain -->
+        <div class="bg-tactical-card rounded-lg border border-tactical-border p-4 hover:border-military-green transition-colors cursor-pointer">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                    <h3 class="font-semibold text-tactical-text mb-1">Network Discovery</h3>
+                    <p class="text-sm text-tactical-muted">Full network enumeration</p>
+                </div>
+                <span class="px-2 py-1 text-xs bg-military-green bg-opacity-20 text-military-green rounded">3 STEPS</span>
+            </div>
+
+            <div class="space-y-2 mb-3">
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-1-circle text-military-green"></i>
+                    <span>nmap host discovery</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-2-circle text-military-green"></i>
+                    <span>nmap service detection</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-3-circle text-military-green"></i>
+                    <span>nmap OS fingerprinting</span>
+                </div>
+            </div>
+
+            <button class="w-full px-3 py-2 bg-military-green hover:bg-military-green-dark text-tactical-bg rounded font-semibold transition-colors text-sm">
+                Execute Chain
+            </button>
+        </div>
+
+        <!-- Exploit Chain -->
+        <div class="bg-tactical-card rounded-lg border border-tactical-border p-4 hover:border-military-green transition-colors cursor-pointer">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                    <h3 class="font-semibold text-tactical-text mb-1">Automated Exploitation</h3>
+                    <p class="text-sm text-tactical-muted">Multi-stage attack sequence</p>
+                </div>
+                <span class="px-2 py-1 text-xs bg-military-red bg-opacity-20 text-military-red rounded">HIGH RISK</span>
+            </div>
+
+            <div class="space-y-2 mb-3">
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-1-circle text-military-green"></i>
+                    <span>vulnerability scan</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-2-circle text-military-green"></i>
+                    <span>exploit selection</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-3-circle text-military-green"></i>
+                    <span>metasploit execution</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-tactical-text">
+                    <i class="bi bi-4-circle text-military-green"></i>
+                    <span>post-exploitation</span>
+                </div>
+            </div>
+
+            <button class="w-full px-3 py-2 bg-military-red hover:bg-military-red-dark text-tactical-bg rounded font-semibold transition-colors text-sm">
+                Execute Chain
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block island_scripts %}
+<!-- Load consolidated islands bundle -->
+<script type="module" src="/static/dist/islands.js"></script>
+{% endblock %}

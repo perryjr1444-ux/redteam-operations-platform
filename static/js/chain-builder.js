@@ -1,0 +1,807 @@
+/**
+ * Attack Chain Builder
+ * Visual graph editor for creating complex attack chains
+ *
+ * Features:
+ * - Alpine.js state management
+ * - D3.js visual graph rendering
+ * - Drag-and-drop step creation
+ * - Dependency management
+ * - Circular dependency validation
+ * - Real-time API integration
+ */
+
+// ============================================================================
+// Alpine.js Component - State Management
+// ============================================================================
+
+document.addEventListener('alpine:init', () => {
+    Alpine.data('chainBuilder', () => ({
+        // State
+        currentChain: {
+            id: null,
+            name: '',
+            description: '',
+            category: '',
+            risk_level: 'medium',
+            steps: [],
+            metadata: {},
+            created_at: null
+        },
+        chains: [],
+        availableTools: [],
+        toolCategories: [],
+        toolSearch: '',
+        selectedStep: null,
+        selectedStepIndex: -1,
+        rightPanelTab: 'tools',
+        validationErrors: [],
+        isLoading: false,
+        isSaving: false,
+        showLibrary: true,
+        zoom: 1,
+
+        // D3 graph instance
+        graph: null,
+
+        // Initialize component
+        async init() {
+            console.log('Chain Builder initialized');
+            await this.loadTools();
+            await this.loadChains();
+            this.$nextTick(() => {
+                this.initializeGraph();
+            });
+        },
+
+        // Load available tools from API
+        async loadTools() {
+            this.isLoading = true;
+            try {
+                const response = await fetch('/api/tools');
+                const data = await response.json();
+                this.availableTools = data.tools || [];
+                console.log(`Loaded ${this.availableTools.length} tools`);
+
+                // Organize tools into categories
+                this.organizeToolsIntoCategories();
+            } catch (error) {
+                console.error('Error loading tools:', error);
+                this.showNotification('Failed to load tools', 'error');
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        // Organize tools into categories for UI display
+        organizeToolsIntoCategories() {
+            const categories = {
+                'recon': [],
+                'scan': [],
+                'exploit': [],
+                'post-exploit': []
+            };
+
+            this.availableTools.forEach(tool => {
+                const type = tool.type || tool.category || 'scan';
+                if (categories[type]) {
+                    categories[type].push(tool);
+                } else {
+                    categories['scan'].push(tool);
+                }
+            });
+
+            this.toolCategories = Object.keys(categories).map(key => ({
+                name: key.charAt(0).toUpperCase() + key.slice(1),
+                tools: categories[key]
+            })).filter(cat => cat.tools.length > 0);
+        },
+
+        // Filter tools by search query
+        filterTools(tools) {
+            if (!this.toolSearch) return tools;
+            const query = this.toolSearch.toLowerCase();
+            return tools.filter(tool =>
+                tool.name.toLowerCase().includes(query) ||
+                (tool.description && tool.description.toLowerCase().includes(query))
+            );
+        },
+
+        // Load saved chains from API
+        async loadChains() {
+            try {
+                const response = await fetch('/api/chains');
+                if (!response.ok) throw new Error('Failed to load chains');
+                const data = await response.json();
+                this.chains = data.chains || [];
+                console.log(`Loaded ${this.chains.length} chains`);
+            } catch (error) {
+                console.error('Error loading chains:', error);
+                // Don't show error notification, just log it
+            }
+        },
+
+        // Initialize D3 graph
+        initializeGraph() {
+            const container = document.getElementById('chain-canvas');
+            if (!container) return;
+
+            this.graph = new ChainGraph('chain-canvas', {
+                onStepClick: (stepId) => this.selectStep(stepId),
+                onStepDrop: (position) => this.handleCanvasDrop(position),
+                onLinkCreate: (sourceId, targetId) => this.createDependency(sourceId, targetId),
+                onLinkDelete: (sourceId, targetId) => this.removeDependency(sourceId, targetId)
+            });
+
+            this.updateGraph();
+        },
+
+        // Add step to chain
+        addStep(tool) {
+            const newStep = {
+                id: this.generateStepId(),
+                tool: tool.name,
+                args: {},
+                depends_on: [],
+                data_mapping: {},
+                condition: null,
+                parallel: false,
+                on_error: 'stop',
+                description: tool.description || '',
+                // Visual properties
+                x: Math.random() * 600 + 100,
+                y: Math.random() * 400 + 100
+            };
+
+            this.chain.steps.push(newStep);
+            this.updateGraph();
+            this.selectStep(newStep.id);
+            this.showNotification(`Added ${tool.name}`, 'success');
+        },
+
+        // Remove step from chain
+        removeStep(stepId) {
+            const index = this.chain.steps.findIndex(s => s.id === stepId);
+            if (index === -1) return;
+
+            // Remove dependencies that reference this step
+            this.chain.steps.forEach(step => {
+                step.depends_on = step.depends_on.filter(id => id !== stepId);
+            });
+
+            this.chain.steps.splice(index, 1);
+
+            if (this.selectedStep?.id === stepId) {
+                this.selectedStep = null;
+                this.selectedStepIndex = -1;
+            }
+
+            this.updateGraph();
+            this.validate();
+        },
+
+        // Select step for editing
+        selectStep(stepId) {
+            const index = this.chain.steps.findIndex(s => s.id === stepId);
+            if (index === -1) return;
+
+            this.selectedStep = this.chain.steps[index];
+            this.selectedStepIndex = index;
+            this.graph?.highlightNode(stepId);
+        },
+
+        // Update selected step
+        updateSelectedStep() {
+            if (this.selectedStepIndex >= 0) {
+                this.chain.steps[this.selectedStepIndex] = {...this.selectedStep};
+                this.updateGraph();
+                this.validate();
+            }
+        },
+
+        // Create dependency between steps
+        createDependency(sourceId, targetId) {
+            const targetStep = this.chain.steps.find(s => s.id === targetId);
+            if (!targetStep) return;
+
+            if (!targetStep.depends_on.includes(sourceId)) {
+                targetStep.depends_on.push(sourceId);
+                this.updateGraph();
+                this.validate();
+            }
+        },
+
+        // Remove dependency
+        removeDependency(sourceId, targetId) {
+            const targetStep = this.chain.steps.find(s => s.id === targetId);
+            if (!targetStep) return;
+
+            targetStep.depends_on = targetStep.depends_on.filter(id => id !== sourceId);
+            this.updateGraph();
+            this.validate();
+        },
+
+        // Validate chain
+        validate() {
+            this.validationErrors = [];
+
+            // Check for empty chain
+            if (this.chain.steps.length === 0) {
+                this.validationErrors.push('Chain must have at least one step');
+                return false;
+            }
+
+            // Check for circular dependencies
+            const circular = this.detectCircularDependencies();
+            if (circular.length > 0) {
+                this.validationErrors.push(`Circular dependencies detected: ${circular.join(', ')}`);
+            }
+
+            // Check for invalid dependencies
+            this.chain.steps.forEach(step => {
+                step.depends_on.forEach(depId => {
+                    if (!this.chain.steps.find(s => s.id === depId)) {
+                        this.validationErrors.push(`Step ${step.id} has invalid dependency: ${depId}`);
+                    }
+                });
+            });
+
+            // Update graph with errors
+            if (this.graph && circular.length > 0) {
+                this.graph.highlightErrors(circular);
+            }
+
+            return this.validationErrors.length === 0;
+        },
+
+        // Detect circular dependencies using DFS
+        detectCircularDependencies() {
+            const visited = new Set();
+            const recStack = new Set();
+            const circular = [];
+
+            const dfs = (stepId, path = []) => {
+                if (recStack.has(stepId)) {
+                    circular.push([...path, stepId].join(' → '));
+                    return true;
+                }
+
+                if (visited.has(stepId)) return false;
+
+                visited.add(stepId);
+                recStack.add(stepId);
+
+                const step = this.chain.steps.find(s => s.id === stepId);
+                if (step) {
+                    for (const depId of step.depends_on) {
+                        if (dfs(depId, [...path, stepId])) {
+                            // Continue checking other dependencies
+                        }
+                    }
+                }
+
+                recStack.delete(stepId);
+                return false;
+            };
+
+            this.chain.steps.forEach(step => {
+                if (!visited.has(step.id)) {
+                    dfs(step.id);
+                }
+            });
+
+            return circular;
+        },
+
+        // Save chain to server
+        async saveChain() {
+            if (!this.validate()) {
+                this.showNotification('Please fix validation errors', 'error');
+                return;
+            }
+
+            if (!this.chain.name) {
+                this.showNotification('Chain name is required', 'error');
+                return;
+            }
+
+            this.isSaving = true;
+
+            try {
+                // Prepare chain data (remove visual properties)
+                const chainData = {
+                    name: this.chain.name,
+                    description: this.chain.description,
+                    category: this.chain.category,
+                    risk_level: this.chain.risk_level,
+                    steps: this.chain.steps.map(step => ({
+                        id: step.id,
+                        tool: step.tool,
+                        args: step.args,
+                        depends_on: step.depends_on,
+                        data_mapping: step.data_mapping,
+                        condition: step.condition,
+                        parallel: step.parallel,
+                        on_error: step.on_error,
+                        description: step.description
+                    })),
+                    metadata: {
+                        ...this.chain.metadata,
+                        created_with: 'chain_builder_ui',
+                        step_positions: this.chain.steps.map(s => ({
+                            id: s.id,
+                            x: s.x,
+                            y: s.y
+                        }))
+                    }
+                };
+
+                const response = await fetch('/api/chains', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(chainData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save chain');
+                }
+
+                const result = await response.json();
+                this.showNotification(`Chain saved: ${result.chain_id}`, 'success');
+
+                // Update chain ID if it was auto-generated
+                if (result.chain_id) {
+                    this.chain.metadata.chain_id = result.chain_id;
+                }
+
+            } catch (error) {
+                console.error('Error saving chain:', error);
+                this.showNotification('Failed to save chain', 'error');
+            } finally {
+                this.isSaving = false;
+            }
+        },
+
+        // Load chain from server
+        async loadChain(chainId) {
+            this.isLoading = true;
+
+            try {
+                const response = await fetch(`/api/chains/${chainId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to load chain');
+                }
+
+                const data = await response.json();
+
+                // Restore chain data
+                this.chain = {
+                    name: data.name,
+                    description: data.description,
+                    category: data.category,
+                    risk_level: data.risk_level,
+                    steps: data.steps.map(step => ({
+                        ...step,
+                        x: 0,
+                        y: 0
+                    })),
+                    metadata: data.metadata || {}
+                };
+
+                // Restore step positions if available
+                if (data.metadata?.step_positions) {
+                    data.metadata.step_positions.forEach(pos => {
+                        const step = this.chain.steps.find(s => s.id === pos.id);
+                        if (step) {
+                            step.x = pos.x;
+                            step.y = pos.y;
+                        }
+                    });
+                }
+
+                this.updateGraph();
+                this.showNotification('Chain loaded', 'success');
+
+            } catch (error) {
+                console.error('Error loading chain:', error);
+                this.showNotification('Failed to load chain', 'error');
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        // Clear chain
+        clearChain() {
+            if (confirm('Clear the current chain? This cannot be undone.')) {
+                this.chain = {
+                    name: '',
+                    description: '',
+                    category: '',
+                    risk_level: 'medium',
+                    steps: [],
+                    metadata: {}
+                };
+                this.selectedStep = null;
+                this.selectedStepIndex = -1;
+                this.validationErrors = [];
+                this.updateGraph();
+            }
+        },
+
+        // Update graph visualization
+        updateGraph() {
+            if (this.graph) {
+                this.graph.update(this.chain.steps);
+            }
+        },
+
+        // Handle canvas drop event
+        handleCanvasDrop(position) {
+            // This would be called when dragging from library
+            console.log('Drop at position:', position);
+        },
+
+        // Auto-layout steps
+        autoLayout() {
+            // Simple force-directed layout
+            const levels = this.getStepLevels();
+            const levelGroups = {};
+
+            levels.forEach((level, stepId) => {
+                if (!levelGroups[level]) levelGroups[level] = [];
+                levelGroups[level].push(stepId);
+            });
+
+            let y = 100;
+            Object.keys(levelGroups).sort().forEach(level => {
+                const steps = levelGroups[level];
+                const spacing = 800 / (steps.length + 1);
+
+                steps.forEach((stepId, index) => {
+                    const step = this.chain.steps.find(s => s.id === stepId);
+                    if (step) {
+                        step.x = spacing * (index + 1);
+                        step.y = y;
+                    }
+                });
+
+                y += 150;
+            });
+
+            this.updateGraph();
+        },
+
+        // Get execution order levels
+        getStepLevels() {
+            const levels = new Map();
+
+            const calculateLevel = (stepId, visited = new Set()) => {
+                if (levels.has(stepId)) return levels.get(stepId);
+                if (visited.has(stepId)) return 0; // Circular dependency
+
+                visited.add(stepId);
+                const step = this.chain.steps.find(s => s.id === stepId);
+                if (!step || step.depends_on.length === 0) {
+                    levels.set(stepId, 0);
+                    return 0;
+                }
+
+                const maxDepLevel = Math.max(
+                    ...step.depends_on.map(depId => calculateLevel(depId, new Set(visited)))
+                );
+                const level = maxDepLevel + 1;
+                levels.set(stepId, level);
+                return level;
+            };
+
+            this.chain.steps.forEach(step => calculateLevel(step.id));
+            return levels;
+        },
+
+        // Generate unique step ID
+        generateStepId() {
+            return `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        },
+
+        // Show notification
+        showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `chain-notification chain-notification-${type}`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        },
+
+        // Export chain as JSON
+        exportChain() {
+            const dataStr = JSON.stringify(this.chain, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+            const exportName = `${this.chain.name || 'chain'}_${Date.now()}.json`;
+
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportName);
+            linkElement.click();
+        },
+
+        // Import chain from JSON
+        importChain(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    this.chain = imported;
+                    this.updateGraph();
+                    this.validate();
+                    this.showNotification('Chain imported', 'success');
+                } catch (error) {
+                    console.error('Import error:', error);
+                    this.showNotification('Failed to import chain', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+    }));
+});
+
+// ============================================================================
+// D3.js Graph Visualization
+// ============================================================================
+
+class ChainGraph {
+    constructor(containerId, callbacks = {}) {
+        this.containerId = containerId;
+        this.callbacks = callbacks;
+        this.width = 900;
+        this.height = 600;
+        this.nodes = [];
+        this.links = [];
+
+        this.init();
+    }
+
+    init() {
+        const container = d3.select(`#${this.containerId}`);
+        container.selectAll('*').remove();
+
+        // Create SVG
+        this.svg = container.append('svg')
+            .attr('width', '100%')
+            .attr('height', '100%')
+            .attr('viewBox', `0 0 ${this.width} ${this.height}`)
+            .style('background', 'var(--darker-bg)');
+
+        // Create zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.5, 2])
+            .on('zoom', (event) => {
+                this.g.attr('transform', event.transform);
+            });
+
+        this.svg.call(zoom);
+
+        // Main group for graph elements
+        this.g = this.svg.append('g');
+
+        // Layers
+        this.linkLayer = this.g.append('g').attr('class', 'links');
+        this.nodeLayer = this.g.append('g').attr('class', 'nodes');
+
+        // Arrow marker for dependencies
+        this.svg.append('defs').append('marker')
+            .attr('id', 'arrowhead')
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 35)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M0,-5L10,0L0,5')
+            .attr('fill', '#00ff00');
+
+        // Error marker
+        this.svg.select('defs').append('marker')
+            .attr('id', 'arrowhead-error')
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 35)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M0,-5L10,0L0,5')
+            .attr('fill', '#ff0040');
+
+        // Force simulation
+        this.simulation = d3.forceSimulation()
+            .force('link', d3.forceLink().id(d => d.id).distance(150))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(this.width / 2, this.height / 2))
+            .force('collision', d3.forceCollide().radius(50));
+    }
+
+    update(steps) {
+        this.nodes = steps.map(step => ({
+            id: step.id,
+            tool: step.tool,
+            x: step.x,
+            y: step.y,
+            description: step.description
+        }));
+
+        this.links = [];
+        steps.forEach(step => {
+            step.depends_on.forEach(depId => {
+                this.links.push({
+                    source: depId,
+                    target: step.id
+                });
+            });
+        });
+
+        this.render();
+    }
+
+    render() {
+        // Update links
+        const link = this.linkLayer.selectAll('.link')
+            .data(this.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+        link.exit().remove();
+
+        const linkEnter = link.enter().append('line')
+            .attr('class', 'link')
+            .attr('stroke', '#00ff00')
+            .attr('stroke-width', 2)
+            .attr('marker-end', 'url(#arrowhead)')
+            .style('opacity', 0.6);
+
+        const linkMerge = linkEnter.merge(link);
+
+        // Update nodes
+        const node = this.nodeLayer.selectAll('.node')
+            .data(this.nodes, d => d.id);
+
+        node.exit().remove();
+
+        const nodeEnter = node.enter().append('g')
+            .attr('class', 'node')
+            .call(d3.drag()
+                .on('start', (event, d) => this.dragStarted(event, d))
+                .on('drag', (event, d) => this.dragged(event, d))
+                .on('end', (event, d) => this.dragEnded(event, d)))
+            .on('click', (event, d) => {
+                if (this.callbacks.onStepClick) {
+                    this.callbacks.onStepClick(d.id);
+                }
+            });
+
+        // Node circle
+        nodeEnter.append('circle')
+            .attr('r', 30)
+            .attr('fill', 'var(--card-bg)')
+            .attr('stroke', '#00ff00')
+            .attr('stroke-width', 2)
+            .style('cursor', 'pointer');
+
+        // Node icon (tool initial)
+        nodeEnter.append('text')
+            .attr('class', 'node-icon')
+            .attr('text-anchor', 'middle')
+            .attr('dy', '.3em')
+            .attr('fill', '#00ff00')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('pointer-events', 'none')
+            .text(d => d.tool ? d.tool.substring(0, 2).toUpperCase() : '??');
+
+        // Node label
+        nodeEnter.append('text')
+            .attr('class', 'node-label')
+            .attr('text-anchor', 'middle')
+            .attr('dy', '50')
+            .attr('fill', '#00ff00')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .text(d => d.tool);
+
+        const nodeMerge = nodeEnter.merge(node);
+
+        // Update simulation
+        this.simulation.nodes(this.nodes);
+        this.simulation.force('link').links(this.links);
+
+        // Position nodes at their saved positions
+        this.nodes.forEach(node => {
+            if (node.x !== undefined) node.fx = node.x;
+            if (node.y !== undefined) node.fy = node.y;
+        });
+
+        this.simulation.alpha(0.3).restart();
+
+        this.simulation.on('tick', () => {
+            linkMerge
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            nodeMerge.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+    }
+
+    highlightNode(nodeId) {
+        this.nodeLayer.selectAll('.node')
+            .select('circle')
+            .attr('stroke', d => d.id === nodeId ? '#00ffff' : '#00ff00')
+            .attr('stroke-width', d => d.id === nodeId ? 3 : 2)
+            .style('filter', d => d.id === nodeId ? 'drop-shadow(0 0 10px #00ffff)' : 'none');
+    }
+
+    highlightErrors(circularPaths) {
+        // Extract step IDs involved in circular dependencies
+        const errorSteps = new Set();
+        circularPaths.forEach(path => {
+            path.split(' → ').forEach(id => errorSteps.add(id));
+        });
+
+        // Highlight error nodes
+        this.nodeLayer.selectAll('.node')
+            .select('circle')
+            .attr('stroke', d => errorSteps.has(d.id) ? '#ff0040' : '#00ff00')
+            .style('filter', d => errorSteps.has(d.id) ? 'drop-shadow(0 0 10px #ff0040)' : 'none');
+
+        // Highlight error links
+        this.linkLayer.selectAll('.link')
+            .attr('stroke', d => {
+                const sourceId = d.source.id || d.source;
+                const targetId = d.target.id || d.target;
+                return (errorSteps.has(sourceId) && errorSteps.has(targetId)) ? '#ff0040' : '#00ff00';
+            })
+            .attr('marker-end', d => {
+                const sourceId = d.source.id || d.source;
+                const targetId = d.target.id || d.target;
+                return (errorSteps.has(sourceId) && errorSteps.has(targetId))
+                    ? 'url(#arrowhead-error)'
+                    : 'url(#arrowhead)';
+            });
+    }
+
+    dragStarted(event, d) {
+        if (!event.active) this.simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+
+    dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    dragEnded(event, d) {
+        if (!event.active) this.simulation.alphaTarget(0);
+        // Keep node at dragged position
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+}
+
+// Export for global use
+window.ChainGraph = ChainGraph;

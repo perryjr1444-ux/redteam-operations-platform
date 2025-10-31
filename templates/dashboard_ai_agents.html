@@ -1,0 +1,264 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}AI Agents Dashboard - Red Team C2{% endblock %}
+
+{% block extra_head %}
+<!-- Dashboard CSS -->
+<link href="/static/css/shadcn-dashboards.css" rel="stylesheet">
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js (must load before dashboard-components) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- D3.js for visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+<!-- Dashboard Components JS -->
+<script src="/static/js/dashboard-components.js"></script>
+{% endblock %}
+
+{% block content %}
+<div x-data="{
+  agents: $store.agentDashboard,
+  refreshControl: window.dashboardComponents.refreshControl('agentDashboard', 5000)
+}" x-init="agents.startAutoRefresh(5000)" class="p-6">
+
+  <!-- Page Header -->
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <h1 class="text-3xl font-bold mb-2">AI Agents Dashboard</h1>
+      <p class="text-tactical-muted">Real-time monitoring of 5 autonomous agents</p>
+    </div>
+
+    <!-- Refresh Controls -->
+    <div x-data="refreshControl" class="flex gap-4 items-center">
+      <select x-model="currentInterval" @change="setInterval($event.target.value)" class="bg-tactical-card border border-tactical-border rounded px-3 py-2">
+        <template x-for="interval in intervals" :key="interval">
+          <option :value="interval" x-text="(interval / 1000) + 's'"></option>
+        </template>
+      </select>
+
+      <button @click="toggle()" class="px-4 py-2 rounded border" :class="isPaused ? 'border-military-green text-military-green' : 'border-military-amber text-military-amber'">
+        <i :class="isPaused ? 'bi bi-play-fill' : 'bi bi-pause-fill'"></i>
+        <span x-text="isPaused ? 'Resume' : 'Pause'"></span>
+      </button>
+
+      <button @click="manualRefresh()" class="px-4 py-2 rounded border border-military-green text-military-green">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
+
+      <span class="text-sm text-tactical-muted">Last: <span x-text="agents.lastUpdate ? new Date(agents.lastUpdate).toLocaleTimeString() : 'Never'"></span></span>
+    </div>
+  </div>
+
+  <!-- Agent Health Cards Grid (5 agents) -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <template x-for="agent in agents.data.agents" :key="agent.type">
+      <div
+        class="agent-card"
+        :data-agent-type="agent.type"
+        :style="'border-color: ' + agent.color"
+      >
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <div class="status-indicator" :class="agent.status"></div>
+            <h3 class="text-lg font-bold capitalize" :style="'color: ' + agent.color" x-text="agent.type"></h3>
+          </div>
+          <i class="bi bi-cpu-fill text-2xl" :style="'color: ' + agent.color"></i>
+        </div>
+
+        <p class="text-sm text-tactical-muted mb-3" x-text="agent.current_task"></p>
+
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-tactical-muted">Tasks</span>
+            <span class="font-mono font-bold" :style="'color: ' + agent.color" x-text="agent.metrics.tasks_completed"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-tactical-muted">Avg Time</span>
+            <span class="font-mono" x-text="agent.metrics.avg_execution_time + 's'"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-tactical-muted">Success</span>
+            <span class="font-mono" x-text="(agent.metrics.success_rate * 100).toFixed(1) + '%'"></span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-tactical-muted">Queue</span>
+            <span class="font-mono" x-text="agent.metrics.queue_length"></span>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Task Queue Visualization (Kanban) -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+      <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+        <i class="bi bi-clock-history text-military-amber"></i>
+        Pending Tasks
+        <span class="badge bg-military-amber text-tactical-bg px-2 py-1 rounded text-xs ml-auto" x-text="agents.data.tasks?.total_pending || 0"></span>
+      </h3>
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        <template x-for="task in agents.data.tasks?.pending || []" :key="task.id">
+          <div class="bg-tactical-surface border border-tactical-border rounded p-3">
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-mono text-sm" x-text="task.id"></span>
+              <span class="text-xs px-2 py-1 rounded" :class="task.priority === 'high' ? 'bg-severity-critical' : 'bg-severity-medium'" x-text="task.priority"></span>
+            </div>
+            <div class="text-sm text-tactical-muted capitalize" x-text="task.agent"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+      <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+        <i class="bi bi-play-circle text-agent-coordinator"></i>
+        Running Tasks
+        <span class="badge bg-agent-coordinator text-tactical-bg px-2 py-1 rounded text-xs ml-auto" x-text="agents.data.tasks?.total_running || 0"></span>
+      </h3>
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        <template x-for="task in agents.data.tasks?.running || []" :key="task.id">
+          <div class="bg-tactical-surface border border-agent-coordinator rounded p-3">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-mono text-sm" x-text="task.id"></span>
+              <span class="text-xs capitalize" x-text="task.agent"></span>
+            </div>
+            <div class="w-full bg-tactical-bg rounded-full h-2">
+              <div class="bg-agent-coordinator h-2 rounded-full transition-all" :style="'width: ' + (task.progress * 100) + '%'"></div>
+            </div>
+            <div class="text-xs text-tactical-muted mt-1" x-text="(task.progress * 100).toFixed(0) + '% complete'"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+      <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+        <i class="bi bi-check-circle text-military-green"></i>
+        Completed Tasks
+        <span class="badge bg-military-green text-tactical-bg px-2 py-1 rounded text-xs ml-auto" x-text="agents.data.tasks?.total_completed || 0"></span>
+      </h3>
+      <div class="space-y-2 max-h-64 overflow-y-auto">
+        <template x-for="task in agents.data.tasks?.completed?.slice(0, 5) || []" :key="task.id">
+          <div class="bg-tactical-surface border border-military-green rounded p-3">
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-mono text-sm" x-text="task.id"></span>
+              <i class="bi" :class="task.success ? 'bi-check-circle-fill text-military-green' : 'bi-x-circle-fill text-severity-critical'"></i>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-tactical-muted capitalize" x-text="task.agent"></span>
+              <span class="font-mono text-xs" x-text="task.duration + 's'"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Charts -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="chart-wrapper">
+      <h3 class="text-lg font-bold mb-4">Agent Performance Comparison</h3>
+      <canvas id="agentPerformanceChart"></canvas>
+    </div>
+
+    <div class="chart-wrapper">
+      <h3 class="text-lg font-bold mb-4">Tasks Per Minute (Live)</h3>
+      <canvas id="tasksPerMinuteChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Task History Table -->
+  <div class="card bg-tactical-card border border-tactical-border rounded p-4">
+    <h3 class="text-lg font-bold mb-4">Recent Task History</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="border-b border-tactical-border">
+          <tr>
+            <th class="text-left p-2 text-tactical-muted">Task ID</th>
+            <th class="text-left p-2 text-tactical-muted">Agent</th>
+            <th class="text-left p-2 text-tactical-muted">Priority</th>
+            <th class="text-left p-2 text-tactical-muted">Duration</th>
+            <th class="text-left p-2 text-tactical-muted">Status</th>
+            <th class="text-left p-2 text-tactical-muted">Completed</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="task in agents.data.tasks?.completed?.slice(0, 10) || []" :key="task.id">
+            <tr class="border-b border-tactical-border hover:bg-tactical-surface">
+              <td class="p-2 font-mono" x-text="task.id"></td>
+              <td class="p-2 capitalize" x-text="task.agent"></td>
+              <td class="p-2">
+                <span class="px-2 py-1 rounded text-xs" :class="task.priority === 'high' ? 'bg-severity-high' : 'bg-severity-medium'" x-text="task.priority"></span>
+              </td>
+              <td class="p-2 font-mono" x-text="task.duration + 's'"></td>
+              <td class="p-2">
+                <i class="bi" :class="task.success ? 'bi-check-circle-fill text-military-green' : 'bi-x-circle-fill text-severity-critical'"></i>
+              </td>
+              <td class="p-2 text-tactical-muted" x-text="new Date(task.completed_at).toLocaleTimeString()"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Initialize charts when Alpine is ready
+document.addEventListener('alpine:init', () => {
+  // Agent Performance Bar Chart
+  const perfCtx = document.getElementById('agentPerformanceChart').getContext('2d');
+  new Chart(perfCtx, {
+    type: 'bar',
+    data: {
+      labels: ['Coordinator', 'Planner', 'Analyzer', 'Advisor', 'Optimizer'],
+      datasets: [{
+        label: 'Success Rate (%)',
+        data: [95, 92, 97, 89, 94],
+        backgroundColor: ['#00ff9f', '#ff6b9d', '#ffd700', '#00d4ff', '#b794f6']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  // Tasks Per Minute Line Chart
+  const tasksCtx = document.getElementById('tasksPerMinuteChart').getContext('2d');
+  new Chart(tasksCtx, {
+    type: 'line',
+    data: {
+      labels: ['5m ago', '4m ago', '3m ago', '2m ago', '1m ago', 'Now'],
+      datasets: [{
+        label: 'Tasks/min',
+        data: [12, 15, 18, 16, 20, 18],
+        borderColor: '#00ff9f',
+        backgroundColor: 'rgba(0, 255, 159, 0.1)',
+        fill: true,
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

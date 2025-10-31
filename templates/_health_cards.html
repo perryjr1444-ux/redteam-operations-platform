@@ -1,0 +1,20 @@
+
+{% for component in health_data %}
+<div class="col-md-4 mb-4">
+  <div class="card text-white bg-dark-subtle">
+    <div class="card-body">
+      <div class="d-flex justify-content-between">
+        <h5 class="card-title">{{ component.name }}</h5>
+        {% if component.status == 'online' %}
+          <span class="badge rounded-pill text-bg-success">Online</span>
+        {% elif component.status == 'degraded' %}
+          <span class="badge rounded-pill text-bg-warning">Degraded</span>
+        {% else %}
+          <span class="badge rounded-pill text-bg-danger">Offline</span>
+        {% endif %}
+      </div>
+      <p class="card-text mt-2">Latency: {{ component.latency }} ms</p>
+    </div>
+  </div>
+</div>
+{% endfor %}

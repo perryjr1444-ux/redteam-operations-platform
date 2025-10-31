@@ -1,0 +1,19 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Results - Red Team C2{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="mb-6">
+    <h1 class="text-3xl font-display font-bold text-military-green mb-2">OPERATION RESULTS</h1>
+    <p class="text-tactical-muted">Execution history and output analysis</p>
+</div>
+
+<!-- Output Viewer Island -->
+<div id="output-viewer-island" data-island="outputViewer" class="h-[calc(100vh-250px)]"></div>
+{% endblock %}
+
+{% block island_scripts %}
+<!-- Load consolidated islands bundle -->
+<script type="module" src="/static/dist/islands.js"></script>
+{% endblock %}

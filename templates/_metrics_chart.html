@@ -1,0 +1,21 @@
+
+<div class="w-100" style="height: 300px;">
+  <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+    <!-- Axes -->
+    <line x1="50" y1="250" x2="380" y2="250" stroke="#888" stroke-width="2" />
+    <line x1="50" y1="50" x2="50" y2="250" stroke="#888" stroke-width="2" />
+    <text x="20" y="55" fill="#888" font-size="12">100</text>
+    <text x="20" y="155" fill="#888" font-size="12">50</text>
+    <text x="20" y="255" fill="#888" font-size="12">0</text>
+
+    {% for item in data %}
+      {% set x_pos = 70 + loop.index0 * 80 %}
+      {% set bar_height = (item.value / 100) * 200 %}
+      {% set y_pos = 250 - bar_height %}
+      <rect x="{{ x_pos }}" y="{{ y_pos }}" width="40" height="{{ bar_height }}" fill="#e91e63">
+        <title>{{ item.label }}: {{ item.value }}%</title>
+      </rect>
+      <text x="{{ x_pos + 5 }}" y="270" fill="#fff" font-size="12">{{ item.label }}</text>
+    {% endfor %}
+  </svg>
+</div>

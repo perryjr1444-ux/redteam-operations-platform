@@ -1,0 +1,56 @@
+{% extends "base_enhanced.html" %}
+
+{% block title %}Network Topology - Red Team C2{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-display font-bold text-military-green">NETWORK TOPOLOGY</h1>
+            <p class="text-tactical-muted font-mono text-sm mt-1">Interactive threat visualization and target mapping</p>
+        </div>
+        <div class="flex gap-2">
+            <button class="bg-tactical-border hover:bg-tactical-muted text-tactical-text px-4 py-2 rounded text-sm font-semibold transition-colors">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <button class="bg-military-green hover:bg-military-green-dark text-tactical-bg px-4 py-2 rounded text-sm font-semibold transition-colors">
+                <i class="bi bi-download"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Threat Map Island -->
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6">
+        <div id="threat-map-island" data-island="threatMap" class="h-[calc(100vh-250px)]"></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="bg-tactical-surface border border-tactical-border rounded-lg p-6">
+        <h3 class="text-sm font-semibold text-tactical-muted mb-4">LEGEND</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded-full bg-military-red"></div>
+                <span class="text-sm text-tactical-text">Attacker</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded-full bg-military-amber"></div>
+                <span class="text-sm text-tactical-text">Target (Scanning)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded-full bg-military-green"></div>
+                <span class="text-sm text-tactical-text">Target (Compromised)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 rounded-full bg-status-offline"></div>
+                <span class="text-sm text-tactical-text">Target (Unknown)</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block island_scripts %}
+<!-- Load consolidated islands bundle -->
+<script type="module" src="/static/dist/islands.js"></script>
+{% endblock %}
